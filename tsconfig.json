@@ -1,11 +1,22 @@
 {
 	"extends": "./tsconfig.base.json",
 	"compilerOptions": {
+		"noEmit": true,
 		"paths": {
-			"@mariozechner/pi-tui": ["./packages/tui/src/index.ts"],
-			"@mariozechner/pi-agent": ["./packages/agent/src/index.ts"],
-			"@mariozechner/pi": ["./packages/pods/src/index.ts"]
+			"*": ["./*"],
+			"@jsmart/jsmart-ai": ["./packages/ai/src/index.ts"],
+			"@jsmart/jsmart-ai/oauth": ["./packages/ai/src/oauth.ts"],
+			"@jsmart/jsmart-ai/*": ["./packages/ai/src/*.ts", "./packages/ai/src/providers/*.ts"],
+			"@jsmart/jsmart-ai/dist/*": ["./packages/ai/src/*"],
+			"@jsmart/jsmart-agent-core": ["./packages/agent/src/index.ts"],
+			"@jsmart/jsmart-agent-core/*": ["./packages/agent/src/*"],
+			"@jsmart/jsmart-gateway": ["./packages/gateway/src/index.ts"],
+			"@jsmart/jsmart-gateway/*": ["./packages/gateway/src/*"],
+			"@sinclair/typebox": ["./node_modules/@sinclair/typebox"],
+			"@jsmart/jsmart-agent-old": ["./packages/agent-old/src/index.ts"],
+			"@jsmart/jsmart-agent-old/*": ["./packages/agent-old/src/*"]
 		}
 	},
-	"include": ["packages/*/src/**/*"]
+	"include": ["packages/*/src/**/*", "packages/*/test/**/*"],
+	"exclude": ["packages/harness-web/src/web/**/*", "**/dist/**"]
 }

@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.1.4/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.3.5/schema.json",
 	"linter": {
 		"enabled": true,
 		"rules": {
@@ -7,11 +7,7 @@
 			"style": {
 				"noNonNullAssertion": "off",
 				"useConst": "error",
-				"useNodejsImportProtocol": "off",
-				"useTemplate": "off"
-			},
-			"correctness": {
-				"noUnusedVariables": "off"
+				"useNodejsImportProtocol": "off"
 			},
 			"suspicious": {
 				"noExplicitAny": "off",
@@ -28,6 +24,13 @@
 		"lineWidth": 120
 	},
 	"files": {
-		"includes": ["packages/*/src/**/*", "*.json", "*.md"]
+		"includes": [
+			"packages/*/src/**/*.ts",
+			"packages/*/test/**/*.ts",
+			"!**/node_modules/**/*",
+			"!**/test-sessions.ts",
+			"!**/models.generated.ts",
+			"!!**/node_modules"
+		]
 	}
 }

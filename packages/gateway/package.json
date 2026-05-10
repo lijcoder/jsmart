@@ -1,0 +1,49 @@
+{
+	"name": "@jsmart/jsmart-gateway",
+	"version": "0.65.2",
+	"description": "Gateway module for channel and routing management",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"bin": {
+		"jsmart-gateway": "./dist/cli.js"
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"clean": "shx rm -rf dist",
+		"build": "tsgo -p tsconfig.build.json",
+		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
+		"start": "node dist/cli.js",
+		"prepublishOnly": "npm run clean && npm run build"
+	},
+	"keywords": [
+		"ai",
+		"gateway",
+		"channels",
+		"routing"
+	],
+	"author": "Jie",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/openclaw-dev/jsmart-mono.git",
+		"directory": "packages/gateway"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"dependencies": {
+		"@jsmart/jsmart-harness": "^0.65.2",
+		"@sinclair/typebox": "^0.34.30",
+		"ajv": "^8.17.1",
+		"@larksuiteoapi/node-sdk": "^1.62.1",
+		"@wecom/aibot-node-sdk": "^1.0.6"
+	},
+	"devDependencies": {
+		"@types/node": "^24.3.0",
+		"typescript": "^5.7.3"
+	}
+}

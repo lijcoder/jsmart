@@ -1,15 +1,8 @@
-// Main exports for pi-agent package
-
-export type { AgentConfig, AgentEvent, AgentEventReceiver } from "./agent.js";
-export { Agent } from "./agent.js";
-export type { ArgDef, ArgDefs, ParsedArgs } from "./args.js";
-// CLI utilities
-export { parseArgs, printHelp } from "./args.js";
-// CLI main function
-export { main } from "./cli.js";
-// Renderers
-export { ConsoleRenderer } from "./renderers/console-renderer.js";
-export { JsonRenderer } from "./renderers/json-renderer.js";
-export { TuiRenderer } from "./renderers/tui-renderer.js";
-export type { SessionData, SessionEvent, SessionHeader } from "./session-manager.js";
-export { SessionManager } from "./session-manager.js";
+// Core Agent
+export * from "./agent.js";
+// Loop functions
+export * from "./agent-loop.js";
+// Proxy utilities
+export * from "./proxy.js";
+// Types
+export * from "./types.js";

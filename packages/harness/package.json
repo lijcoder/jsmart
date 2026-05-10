@@ -1,0 +1,47 @@
+{
+	"name": "@jsmart/jsmart-harness",
+	"version": "0.65.2",
+	"description": "Custom coding agent harness",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"clean": "shx rm -rf dist",
+		"build": "tsgo -p tsconfig.build.json",
+		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
+		"test": "vitest --run",
+		"prepublishOnly": "npm run clean && npm run build"
+	},
+	"keywords": [
+		"ai",
+		"agent",
+		"llm"
+	],
+	"author": "Jie",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/openclaw-dev/jsmart-mono.git",
+		"directory": "packages/harness"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"dependencies": {
+		"@jsmart/jsmart-agent-core": "^0.65.2",
+		"@jsmart/jsmart-ai": "^0.65.2",
+		"@sinclair/typebox": "^0.34.30",
+		"ajv": "^8.17.1",
+		"diff": "^8.0.2",
+		"yaml": "^2.8.0"
+	},
+	"devDependencies": {
+		"@types/node": "^24.3.0",
+		"typescript": "^5.7.3",
+		"vitest": "^3.2.4"
+	}
+}

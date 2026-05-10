@@ -1,5 +1,5 @@
 {
-	"name": "pi-monorepo",
+	"name": "jsmart",
 	"private": true,
 	"type": "module",
 	"workspaces": [
@@ -7,25 +7,46 @@
 	],
 	"scripts": {
 		"clean": "npm run clean --workspaces",
-		"build": "npm run build -w @mariozechner/pi-tui && npm run build -w @mariozechner/pi-agent && npm run build -w @mariozechner/pi",
-		"check": "biome check --write . && npm run check --workspaces && tsc --noEmit",
+		"build": "cd packages/ai && npm run build && cd ../agent && npm run build && cd ../harness && npm run build && cd ../gateway && npm run build",
+		"dev": "concurrently --names \"ai,agent,gateway\" --prefix-colors \"cyan,yellow,green\" \"cd packages/ai && npm run dev\" \"cd packages/agent && npm run dev\" \"cd packages/gateway && npm run dev\"",
+		"start:gateway": "cd packages/gateway && npm run start",
+		"dev:tsc": "concurrently --names \"ai\" --prefix-colors \"cyan\" \"cd packages/ai && npm run dev:tsc\"",
+		"check": "biome check --write --error-on-warnings . && tsgo --noEmit",
 		"test": "npm run test --workspaces --if-present",
-		"version:patch": "npm version patch -ws --no-git-tag-version && node scripts/sync-versions.js",
-		"version:minor": "npm version minor -ws --no-git-tag-version && node scripts/sync-versions.js",
-		"version:major": "npm version major -ws --no-git-tag-version && node scripts/sync-versions.js",
+		"version:patch": "npm version patch -ws --no-git-tag-version && node scripts/sync-versions.js && shx rm -rf node_modules packages/*/node_modules package-lock.json && npm install",
+		"version:minor": "npm version minor -ws --no-git-tag-version && node scripts/sync-versions.js && shx rm -rf node_modules packages/*/node_modules package-lock.json && npm install",
+		"version:major": "npm version major -ws --no-git-tag-version && node scripts/sync-versions.js && shx rm -rf node_modules packages/*/node_modules package-lock.json && npm install",
 		"version:set": "npm version -ws",
-		"version:sync": "node scripts/sync-versions.js",
-		"prepublish:all": "npm run clean && npm run build && npm run check",
-		"publish:all": "npm run prepublish:all && npm publish -ws --access public",
-		"publish:dry": "npm run prepublish:all && npm publish -ws --access public --dry-run"
+		"prepublishOnly": "npm run clean && npm run build && npm run check",
+		"publish": "npm run prepublishOnly && npm publish -ws --access public",
+		"publish:dry": "npm run prepublishOnly && npm publish -ws --access public --dry-run",
+		"release:patch": "node scripts/release.mjs patch",
+		"release:minor": "node scripts/release.mjs minor",
+		"release:major": "node scripts/release.mjs major",
+		"prepare": "husky"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.1.4",
+		"@biomejs/biome": "2.3.5",
 		"@types/node": "^22.10.5",
+		"@typescript/native-preview": "7.0.0-dev.20260120.1",
+		"concurrently": "^9.2.1",
+		"husky": "^9.1.7",
 		"tsx": "^4.20.3",
-		"typescript": "^5.9.2"
+		"typescript": "^5.9.2",
+		"shx": "^0.4.0"
 	},
 	"engines": {
 		"node": ">=20.0.0"
+	},
+	"version": "0.0.3",
+	"dependencies": {
+		"get-east-asian-width": "^1.4.0"
+	},
+	"overrides": {
+		"rimraf": "6.1.2",
+		"fast-xml-parser": "5.3.8",
+		"gaxios": {
+			"rimraf": "6.1.2"
+		}
 	}
 }

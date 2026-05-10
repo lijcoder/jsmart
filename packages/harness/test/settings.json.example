@@ -1,0 +1,35 @@
+{
+  "agentTemplates": {
+    "default": {
+      "model": {
+        "provider": "my",
+        "model": "qwen3.5-plus"
+      }
+    },
+    "code-review": {
+      "model": {
+        "provider": "my",
+        "model": "qwen3.5-plus"
+      },
+      "skills": ["/Users/lijie/.jie/test/agents/code-review/skills"]
+    }
+  },
+  "channels": {
+    "feishu-main": {
+      "type": "feishu",
+      "appId": "${FEISHU_APP_ID}",
+      "appSecret": "${FEISHU_APP_SECRET}",
+      "routes": [
+        { "id": "feishu-default", "match": { "chatId": "oc_default-group" }, "agent": "default" },
+        { "id": "feishu-review", "match": { "chatId": "oc_code-review-group" }, "agent": "code-review", "threadMode": true }
+      ]
+    },
+    "console": {
+      "type": "console",
+      "showTools": true,
+      "routes": [
+        { "id": "console-default", "match": {}, "agent": "default", "sessionId": "console-session" }
+      ]
+    }
+  }
+}
