@@ -1,5 +1,7 @@
 # JSmart Monorepo
 
+Inspired by [pi-mono](https://github.com/earendil-works/pi).
+
 Tools for building AI agents and managing LLM deployments.
 
 ## Share your OSS coding agent sessions
