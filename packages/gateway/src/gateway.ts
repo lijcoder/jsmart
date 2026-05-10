@@ -1,4 +1,5 @@
 import type { AgentSession, AgentSessionEvent } from "@jsmart/jsmart-harness";
+import { ModelManager } from "@jsmart/jsmart-harness";
 import { createAgentSession } from "./agent-factory.js";
 import { getGlobalRegistry } from "./channels/registry.js";
 import type { Channel, MessageSource } from "./channels/types.js";
@@ -8,7 +9,7 @@ import { logger } from "./logger.js";
 export class Gateway {
 	private settings: Settings;
 	private rootDir: string;
-	private modelFile: string;
+	private modelManager: ModelManager;
 	private channels = new Map<string, Channel>();
 	/** "agentName:sessionId" → AgentSession cache */
 	private sessions = new Map<string, AgentSession>();
@@ -18,7 +19,7 @@ export class Gateway {
 	constructor(settings: Settings, rootDir: string, modelFile: string) {
 		this.settings = settings;
 		this.rootDir = rootDir;
-		this.modelFile = modelFile;
+		this.modelManager = new ModelManager(modelFile);
 	}
 
 	/** Register a channel */
@@ -95,7 +96,7 @@ export class Gateway {
 				source.sessionId,
 				route.agent,
 				this.rootDir,
-				this.modelFile,
+				this.modelManager,
 				this.settings,
 			);
 			this.sessions.set(sessionKey, session);

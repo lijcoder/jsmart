@@ -1,4 +1,4 @@
-import { AgentSession, DefaultResourceLoader, ModelManager, SessionManager } from "@jsmart/jsmart-harness";
+import { AgentSession, DefaultResourceLoader, type ModelManager, SessionManager } from "@jsmart/jsmart-harness";
 import { existsSync, mkdirSync } from "fs";
 import type { Settings } from "./config.js";
 import { resolveAgentSessionsDir, resolveAgentWorkspaceDir, resolveSessionFile } from "./config.js";
@@ -9,13 +9,14 @@ import { resolveAgentSessionsDir, resolveAgentWorkspaceDir, resolveSessionFile }
  * @param sessionId - The session identifier
  * @param agentName - The agent template name
  * @param rootDir - Root directory for resolving paths
+ * @param modelManager - Shared ModelManager instance (global, not per-session)
  */
 export function createAgentSession(
 	routeId: string,
 	sessionId: string,
 	agentName: string,
 	rootDir: string,
-	modelFile: string,
+	modelManager: ModelManager,
 	config: Settings,
 ): AgentSession {
 	// Find the route across all channels
@@ -41,7 +42,6 @@ export function createAgentSession(
 		mkdirSync(sessionsDir, { recursive: true });
 	}
 
-	const modelManager = new ModelManager(modelFile);
 	const resourceLoader = new DefaultResourceLoader({
 		skillPaths: template.skills,
 		noSkills: template.skills === undefined,
