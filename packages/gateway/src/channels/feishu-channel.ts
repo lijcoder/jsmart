@@ -30,6 +30,8 @@ export class FeishuChannel implements Channel {
 	/** Fixed-size circular deduplication buffer: 10 event_ids */
 	private readonly _processedEventIds: (string | undefined)[] = new Array(10);
 	private _writeIndex = 0;
+	/** Maps sessionId → source for the currently running prompt in that session */
+	private activeSources = new Map<string, MessageSource>();
 
 	constructor(options: FeishuChannelOptions) {
 		this.options = options;
@@ -57,7 +59,7 @@ export class FeishuChannel implements Channel {
 		try {
 			this.wsClient.start({
 				eventDispatcher: new Lark.EventDispatcher({}).register({
-					"im.message.receive_v1": (data) => {
+					"im.message.receive_v1": async (data) => {
 						const eventId = data.event_id;
 						const content = data.message?.content?.trim();
 						const chatId = data.message?.chat_id;
@@ -93,6 +95,13 @@ export class FeishuChannel implements Channel {
 							content,
 						);
 
+						// Reject message if the session is already running a prompt
+						if (this.activeSources.has(sessionId)) {
+							logger.info("[Feishu] Session %s is busy, dropping message with SLEEP reaction", sessionId);
+							await this._addReaction({ chatId: chatId ?? "", messageId }, "SLEEP");
+							return;
+						}
+
 						const source: MessageSource = {
 							channelId: this.id,
 							routeId: route.id,
@@ -103,6 +112,12 @@ export class FeishuChannel implements Channel {
 								threadId: threadId || undefined,
 							},
 						};
+
+						// Track this session as active before forwarding to gateway
+						this.activeSources.set(sessionId, source);
+
+						// Add "Get" reaction to indicate the message is being processed
+						await this._addReaction({ chatId: chatId ?? "", messageId }, "Get");
 
 						// Fire-and-forget: return immediately so SDK sends ACK to Feishu
 						this.onMessage?.(source, content).catch((err) => {
@@ -133,6 +148,7 @@ export class FeishuChannel implements Channel {
 		this.wsClient?.close({ force: true });
 		this.wsClient = undefined;
 		this.client = undefined;
+		this.activeSources.clear();
 	}
 
 	private async _sendText(meta: FeishuMeta, content: string): Promise<void> {
@@ -162,7 +178,10 @@ export class FeishuChannel implements Channel {
 	}
 
 	async sendEvent(source: MessageSource, event: AgentSessionEvent): Promise<void> {
-		const rawMeta = source.metadata as FeishuMeta | undefined;
+		// Use the stored source for this session so metadata always matches
+		// the current incoming message, not the first one that created the session.
+		const effectiveSource = this.activeSources.get(source.sessionId) ?? source;
+		const rawMeta = effectiveSource.metadata as FeishuMeta | undefined;
 		const meta: FeishuMeta = {
 			chatId: rawMeta?.chatId ?? "",
 			messageId: rawMeta?.messageId ?? "",
@@ -171,13 +190,16 @@ export class FeishuChannel implements Channel {
 
 		// Send "typing" reaction when the agent starts
 		if (event.type === "agent_start" && meta.messageId) {
-			this._addReaction(meta, "Get");
+			await this._addReaction(meta, "Typing");
 			return;
 		}
 
-		// Send "done" reaction when the agent run completes
-		if (event.type === "agent_end" && meta.messageId) {
-			this._addReaction(meta, "DONE");
+		// Send "done" reaction when the agent run completes, then release the session
+		if (event.type === "agent_end") {
+			if (meta.messageId) {
+				await this._addReaction(meta, "DONE");
+			}
+			this.activeSources.delete(source.sessionId);
 			return;
 		}
 
