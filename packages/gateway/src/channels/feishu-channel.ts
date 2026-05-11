@@ -156,24 +156,80 @@ export class FeishuChannel implements Channel {
 
 		const msgContent = JSON.stringify(buildCardMessage(content));
 
-		if (meta.threadId) {
-			await this.client.im.message.reply({
-				path: { message_id: meta.messageId },
-				data: {
-					reply_in_thread: true,
-					content: msgContent,
-					msg_type: "interactive",
-				},
-			});
-		} else {
-			await this.client.im.message.create({
-				params: { receive_id_type: "chat_id" },
-				data: {
-					receive_id: meta.chatId,
-					content: msgContent,
-					msg_type: "interactive",
-				},
-			});
+		try {
+			if (meta.threadId) {
+				await this.client.im.message.reply({
+					path: { message_id: meta.messageId },
+					data: {
+						reply_in_thread: true,
+						content: msgContent,
+						msg_type: "interactive",
+					},
+				});
+			} else {
+				await this.client.im.message.create({
+					params: { receive_id_type: "chat_id" },
+					data: {
+						receive_id: meta.chatId,
+						content: msgContent,
+						msg_type: "interactive",
+					},
+				});
+			}
+		} catch (error: unknown) {
+			logger.error("[Feishu] Failed to send message: %s", error);
+			const errMsg = this._extractApiError(error);
+			await this._sendFallbackText(meta, `[Error] Send failed: ${errMsg}`);
+		}
+	}
+
+	/** Extract a human-readable error message from a Lark SDK / Axios error */
+	private _extractApiError(error: unknown): string {
+		// Lark API errors are AxiosError with response.data containing { code, msg }
+		const apiErr = error as Record<string, unknown> | undefined;
+		const resp = apiErr?.response as Record<string, unknown> | undefined;
+		const data = resp?.data as Record<string, unknown> | undefined;
+		if (data?.msg) {
+			const code = data.code ?? "?";
+			return `code=${code} ${data.msg}`;
+		}
+		if (resp?.status) {
+			return `HTTP ${resp.status} ${resp.statusText ?? ""}`;
+		}
+		if (error instanceof Error) {
+			return error.message;
+		}
+		return String(error);
+	}
+
+	/** Fallback plain-text send when the interactive card message fails */
+	private async _sendFallbackText(meta: FeishuMeta, content: string): Promise<void> {
+		if (!content.trim() || !this.client) return;
+
+		const textContent = JSON.stringify({ text: content });
+
+		try {
+			if (meta.threadId) {
+				await this.client.im.message.reply({
+					path: { message_id: meta.messageId },
+					data: {
+						reply_in_thread: true,
+						content: textContent,
+						msg_type: "text",
+					},
+				});
+			} else {
+				await this.client.im.message.create({
+					params: { receive_id_type: "chat_id" },
+					data: {
+						receive_id: meta.chatId,
+						content: textContent,
+						msg_type: "text",
+					},
+				});
+			}
+		} catch (fallbackErr: unknown) {
+			logger.error("[Feishu] Failed to send fallback message: %s", fallbackErr);
 		}
 	}
 
