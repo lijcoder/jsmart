@@ -116,6 +116,18 @@ export class FeishuChannel implements Channel {
 		}
 	}
 
+	private async _addReaction(meta: FeishuMeta, emojiType: string): Promise<void> {
+		if (!this.client || !meta.messageId) return;
+		try {
+			await this.client.im.messageReaction.create({
+				path: { message_id: meta.messageId },
+				data: { reaction_type: { emoji_type: emojiType } },
+			});
+		} catch (err) {
+			logger.error("[Feishu] Failed to add reaction %s: %s", emojiType, err);
+		}
+	}
+
 	async stop(): Promise<void> {
 		this.onMessage = undefined;
 		this.wsClient?.close({ force: true });
@@ -150,28 +162,39 @@ export class FeishuChannel implements Channel {
 	}
 
 	async sendEvent(source: MessageSource, event: AgentSessionEvent): Promise<void> {
-		// Feishu channel only sends final assistant text messages.
-		// Thinking, tool calls, and intermediate events are not forwarded.
-		if (event.type !== "message_end") return;
-		if (event.message.role !== "assistant") return;
-
 		const rawMeta = source.metadata as FeishuMeta | undefined;
 		const meta: FeishuMeta = {
-			chatId: rawMeta?.chatId ?? source.sessionId,
+			chatId: rawMeta?.chatId ?? "",
 			messageId: rawMeta?.messageId ?? "",
 			threadId: rawMeta?.threadId,
 		};
 
-		const text = this._extractText(event.message.content);
-		if (text) {
-			await this._sendText(meta, text);
+		// Send "typing" reaction when the agent starts
+		if (event.type === "agent_start" && meta.messageId) {
+			this._addReaction(meta, "Get");
+			return;
 		}
-		if (event.message.stopReason === "error") {
-			const errMsg = event.message.errorMessage ?? "Unknown error";
-			await this._sendText(meta, `[Error] ${errMsg}`);
+
+		// Send "done" reaction when the agent run completes
+		if (event.type === "agent_end" && meta.messageId) {
+			this._addReaction(meta, "DONE");
+			return;
 		}
-		if (event.message.stopReason === "length") {
-			await this._sendText(meta, "[Error] Message length exceeds limit.");
+
+		// Send final assistant text message.
+		// Thinking, tool calls, and intermediate events are not forwarded.
+		if (event.type === "message_end" && event.message.role === "assistant") {
+			const text = this._extractText(event.message.content);
+			if (text) {
+				await this._sendText(meta, text);
+			}
+			if (event.message.stopReason === "error") {
+				const errMsg = event.message.errorMessage ?? "Unknown error";
+				await this._sendText(meta, `[Error] ${errMsg}`);
+			}
+			if (event.message.stopReason === "length") {
+				await this._sendText(meta, "[Error] Message length exceeds limit.");
+			}
 		}
 	}
 
