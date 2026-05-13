@@ -1,4 +1,4 @@
-# JSmart Monorepo
+# JSmart
 
 Inspired by [pi-mono](https://github.com/earendil-works/pi).
 
@@ -28,6 +28,7 @@ I regularly publish my own `jsmart-mono` work sessions here:
 | **[@jsmart/jsmart-agent-core](packages/agent)** | Agent runtime with tool calling and state management |
 | **[@jsmart/jsmart-harness](packages/harness)** | Custom coding agent harness |
 | **[@jsmart/jsmart-gateway](packages/gateway)** | Multi-channel gateway with agent routing |
+| **[@jsmart/jsmart-coding-agent](packages/coding-agent)** | Interactive coding agent CLI with session management |
 
 ## Contributing
 
