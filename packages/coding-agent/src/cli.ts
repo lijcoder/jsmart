@@ -58,6 +58,7 @@ async function main(): Promise<void> {
 	show("  /compact            - Compact context");
 	show("  /tokens             - Show token count");
 	show("  /session            - Show session file path");
+	show("  /multiline          - Enter multiline input mode (type /end to submit)");
 	show("  /quit               - Exit");
 	show("");
 
@@ -66,10 +67,28 @@ async function main(): Promise<void> {
 		output: process.stdout,
 	});
 
+	let multilineBuffer = "";
+	let isMultilineMode = false;
+
 	while (true) {
+		const promptText = isMultilineMode ? "... " : "> ";
 		const answer = await new Promise<string>((resolve) => {
-			rl.question("> ", resolve);
+			rl.question(promptText, resolve);
 		});
+
+		// Handle multiline mode
+		if (isMultilineMode) {
+			if (answer.trim() === "/end") {
+				isMultilineMode = false;
+				if (multilineBuffer.trim()) {
+					await session.prompt(multilineBuffer.trim());
+				}
+				multilineBuffer = "";
+				continue;
+			}
+			multilineBuffer += answer + "\n";
+			continue;
+		}
 
 		const command = answer.trim().toLowerCase();
 
@@ -77,6 +96,13 @@ async function main(): Promise<void> {
 			show(colorize("Goodbye!", "result"));
 			rl.close();
 			break;
+		}
+
+		if (command === "/multiline") {
+			isMultilineMode = true;
+			multilineBuffer = "";
+			show(colorize("Multiline mode ON. Type /end to submit.", "result"));
+			continue;
 		}
 
 		if (command === "/model") {
