@@ -5,12 +5,12 @@ import { DefaultResourceLoader } from "../src/resource-manager.js";
 import { SessionManager } from "../src/session-manager.js";
 import { agentSubscriberFormat } from "./agent-session.out.js";
 
-const workspace = "/Users/lijie/.jie/test/workspaces";
-const sessionFile = "/Users/lijie/.jie/test/sessions/test_1.jsonl";
-const modelFile = "/Users/lijie/.jie/test/models.json";
-const providerName = "my";
-const modelName = "qwen3.5-plus";
-const skillPaths = ["/Users/lijie/.jie/test/skills"];
+const workspace = process.env.JIE_TEST_WORKSPACE!;
+const sessionFile = process.env.JIE_TEST_SESSION_FILE!;
+const modelFile = process.env.JIE_TEST_MODEL_FILE!;
+const providerName = process.env.JIE_TEST_PROVIDER_NAME!;
+const modelName = process.env.JIE_TEST_MODEL_NAME!;
+const skillPaths = process.env.JIE_TEST_SKILL_PATHS!.split(",");
 const modelManager = new ModelManager(modelFile);
 const resourceLoader = new DefaultResourceLoader({ skillPaths: skillPaths, noSkills: false });
 const sessionManager = new SessionManager(true, sessionFile);

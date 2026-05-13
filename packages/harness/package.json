@@ -14,6 +14,7 @@
 		"build": "tsgo -p tsconfig.build.json",
 		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
 		"test": "vitest --run",
+		"test:session": "node --env-file=.env --import tsx test/agent-session.test.ts",
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"keywords": [
