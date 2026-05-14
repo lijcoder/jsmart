@@ -7,10 +7,11 @@
  *   npx tsx src/cli.ts --init       # initialize global config
  *
  * Keys:
- *   Enter   - Submit input
- *   ESC     - Abort running agent
- *   Ctrl+C  - Exit
- *   Ctrl+L  - Clear screen
+ *   Enter        - Submit input
+ *   Ctrl+J       - Insert newline (multi-line input)
+ *   ESC          - Abort running agent
+ *   Ctrl+C       - Exit
+ *   Ctrl+L       - Clear screen
  */
 
 import { CodingSession } from "./coding-session.js";
@@ -21,7 +22,6 @@ import { colorize, handleAgentEvent } from "./event-output.js";
 
 const ESC = "\x1b";
 const CLEAR_LINE = `${ESC}[2K`;
-const CURSOR_HOME = `${ESC}[G`;
 
 function show(text: string): void {
 	process.stdout.write(`${text}\n`);
@@ -29,10 +29,6 @@ function show(text: string): void {
 
 function writePrompt(text: string): void {
 	process.stdout.write(`${text} `);
-}
-
-function clearLineAndWrite(text: string): void {
-	process.stdout.write(`${CLEAR_LINE}${CURSOR_HOME}${text}`);
 }
 
 // ── Command parsing ─────────────────────────────────────────────────
@@ -85,6 +81,7 @@ async function main(): Promise<void> {
 	show("  /quit               - Exit");
 	show("");
 	show(`${ESC}[90mPress ESC to abort a running agent, Ctrl+C to exit.${ESC}[0m`);
+	show(`${ESC}[90mPress Ctrl+J to insert a newline in your input.${ESC}[0m`);
 	show("");
 
 	// ── Raw mode setup ────────────────────────────────────────────
@@ -104,6 +101,9 @@ async function main(): Promise<void> {
 	let isAgentRunning = false;
 	let isExiting = false;
 
+	// Track how many screen lines the prompt currently occupies
+	let promptLineCount = 1;
+
 	function getPromptText(): string {
 		if (isMultilineMode) return "...";
 		if (isAgentRunning) return "⏳";
@@ -111,7 +111,30 @@ async function main(): Promise<void> {
 	}
 
 	function renderPrompt(): void {
-		clearLineAndWrite(`${getPromptText()} ${inputBuffer}`);
+		const promptText = `${getPromptText()} ${inputBuffer}`;
+		const newLineCount = promptText.split("\n").length;
+
+		// Move cursor up to the first line of the previous prompt
+		if (promptLineCount > 1) {
+			process.stdout.write(`${ESC}[${promptLineCount - 1}A`);
+		}
+
+		// Clear all lines the previous prompt occupied
+		for (let i = 0; i < promptLineCount; i++) {
+			process.stdout.write(`${CLEAR_LINE}${ESC}[G`);
+			if (i < promptLineCount - 1) {
+				process.stdout.write(`${ESC}[E`); // cursor to next line
+			}
+		}
+
+		// Move cursor back up to the first line
+		if (promptLineCount > 1) {
+			process.stdout.write(`${ESC}[${promptLineCount - 1}A`);
+		}
+
+		// Update line count and write the new prompt
+		promptLineCount = newLineCount;
+		process.stdout.write(promptText);
 	}
 
 	function handleAbort(): void {
@@ -119,6 +142,29 @@ async function main(): Promise<void> {
 			session.abort();
 			// Don't print here — wait for agent_end event with stopReason="aborted"
 		}
+	}
+
+	/** Clear the current prompt lines from the screen, cursor ends at first line */
+	function clearPromptLines(): void {
+		if (promptLineCount > 1) {
+			process.stdout.write(`${ESC}[${promptLineCount - 1}A`);
+		}
+		for (let i = 0; i < promptLineCount; i++) {
+			process.stdout.write(`${CLEAR_LINE}${ESC}[G`);
+			if (i < promptLineCount - 1) {
+				process.stdout.write(`${ESC}[E`);
+			}
+		}
+		if (promptLineCount > 1) {
+			process.stdout.write(`${ESC}[${promptLineCount - 1}A`);
+		}
+		promptLineCount = 1;
+	}
+
+	/** Reset prompt to a fresh single-line state (used after commands/submit) */
+	function resetPrompt(): void {
+		promptLineCount = 1;
+		writePrompt(getPromptText());
 	}
 
 	async function handleSubmit(): Promise<void> {
@@ -129,8 +175,9 @@ async function main(): Promise<void> {
 				isMultilineMode = false;
 				multilineBuffer = "";
 				inputBuffer = "";
+				clearPromptLines();
 				process.stdout.write("\n");
-				writePrompt(getPromptText());
+				resetPrompt();
 				return;
 			}
 			multilineBuffer += `${inputBuffer}\n`;
@@ -141,10 +188,13 @@ async function main(): Promise<void> {
 
 		const command = text.trim().toLowerCase();
 		inputBuffer = "";
-		process.stdout.write("\n");
+
+		// Clear old prompt lines, echo submitted text with User tag
+		clearPromptLines();
+		process.stdout.write(`\n${colorize("User", "user")}\n${text}\n`);
 
 		if (!command) {
-			writePrompt(getPromptText());
+			resetPrompt();
 			return;
 		}
 
@@ -161,20 +211,20 @@ async function main(): Promise<void> {
 			isMultilineMode = true;
 			multilineBuffer = "";
 			show(colorize("Multiline mode ON. Type /end to submit.", "result"));
-			writePrompt(getPromptText());
+			resetPrompt();
 			return;
 		}
 
 		if (command === "/model") {
 			show(`Current model: ${session.getCurrentModel()}`);
-			writePrompt(getPromptText());
+			resetPrompt();
 			return;
 		}
 
 		if (command === "/models") {
 			const models = session.getAllModels();
 			show(models.length > 0 ? models.join("\n") : "No models available");
-			writePrompt(getPromptText());
+			resetPrompt();
 			return;
 		}
 
@@ -188,19 +238,19 @@ async function main(): Promise<void> {
 			} else {
 				show(`Error: ${result.error}`);
 			}
-			writePrompt(getPromptText());
+			resetPrompt();
 			return;
 		}
 
 		if (command === "/tokens") {
 			show(`Context tokens: ${session.getContextTokens()}`);
-			writePrompt(getPromptText());
+			resetPrompt();
 			return;
 		}
 
 		if (command === "/session") {
 			show(`Session file: ${session.getSessionFilePath()}`);
-			writePrompt(getPromptText());
+			resetPrompt();
 			return;
 		}
 
@@ -212,7 +262,7 @@ async function main(): Promise<void> {
 				const { isSuccess, error } = session.changeModel(parts[2], parts[3]);
 				show(isSuccess ? colorize("Model changed", "result") : `${colorize("Error", "error")}: ${error}`);
 			}
-			writePrompt(getPromptText());
+			resetPrompt();
 			return;
 		}
 
@@ -231,7 +281,7 @@ async function main(): Promise<void> {
 			} finally {
 				isAgentRunning = false;
 				if (!isExiting) {
-					writePrompt(getPromptText());
+					resetPrompt();
 				}
 			}
 		}
@@ -275,11 +325,18 @@ async function main(): Promise<void> {
 		// Don't accept input while agent is running (except ESC/Ctrl+C)
 		if (isAgentRunning) return;
 
+		// Ctrl+J → insert newline
+		if (k === "\n") {
+			inputBuffer += "\n";
+			renderPrompt();
+			return;
+		}
+
 		// Enter → submit
-		if (k === "\r" || k === "\n") {
+		if (k === "\r") {
 			handleSubmit().catch((err) => {
 				show(`${colorize("Error", "error")}: ${err}`);
-				writePrompt(getPromptText());
+				resetPrompt();
 			});
 			return;
 		}
@@ -331,7 +388,7 @@ async function main(): Promise<void> {
 	});
 
 	// Initial prompt
-	writePrompt(getPromptText());
+	resetPrompt();
 }
 
 main().catch((err) => {

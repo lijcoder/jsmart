@@ -9,6 +9,7 @@ const color = {
 	result: { bg: "\x1b[42m", fg: "\x1b[97m", text: "Result" },
 	thinking: { bg: "\x1b[47m", fg: "\x1b[30m", text: "Thinking" },
 	error: { bg: "\x1b[41m", fg: "\x1b[97m", text: "Error" },
+	user: { bg: "\x1b[44m", fg: "\x1b[97m", text: "User" },
 };
 
 const colorReset = "\x1b[0m";
