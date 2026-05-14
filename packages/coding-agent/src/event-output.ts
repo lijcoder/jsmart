@@ -57,7 +57,7 @@ export function handleAgentEvent(event: AgentEvent): void {
 
 		case "tool_execution_end":
 			if (event.isError) {
-				process.stdout.write(`State: ${colorFg("error", "\x1b[31m")}\n`);
+				process.stdout.write(`State: ${colorFg("error", "\x1b[31m")}\n${event.result}\n`);
 			} else {
 				process.stdout.write(`State: ${colorFg("success", "\x1b[32m")}\n`);
 			}
