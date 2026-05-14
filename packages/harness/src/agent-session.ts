@@ -156,6 +156,16 @@ export class AgentSession {
 		await this.agent.prompt(text);
 	}
 
+	/** Abort the current agent run, if one is active. */
+	abort(): void {
+		this.agent.abort();
+	}
+
+	/** Check if the agent is currently processing a prompt. */
+	isProcessing(): boolean {
+		return this.agent.state.isStreaming;
+	}
+
 	messageCount(): number {
 		return this.agent.state.messages.length;
 	}

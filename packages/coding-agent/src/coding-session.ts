@@ -61,6 +61,16 @@ export class CodingSession {
 		await this.agentSession.prompt(text);
 	}
 
+	/** Abort the current agent run, if one is active. */
+	abort(): void {
+		this.agentSession.abort();
+	}
+
+	/** Check if the agent is currently processing a prompt. */
+	isProcessing(): boolean {
+		return this.agentSession.isProcessing();
+	}
+
 	/** Change the current model */
 	changeModel(provider: string, model: string): ResultState<void> {
 		return this.agentSession.changeModel(provider, model);

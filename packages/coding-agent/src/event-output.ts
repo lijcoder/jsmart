@@ -22,21 +22,8 @@ function colorFg(text: string, fgColor: string): string {
 }
 
 /** Format tool args for display - shows key info concisely */
-function formatToolArgs(toolName: string, args: Record<string, unknown>): string {
-	switch (toolName) {
-		case "read":
-			return `path: ${args.path}${args.offset ? `, offset: ${args.offset}` : ""}${args.limit ? `, limit: ${args.limit}` : ""}`;
-		case "bash":
-			return `command: ${args.command}`;
-		case "edit":
-			return `path: ${args.path}`;
-		case "write":
-			return `path: ${args.path}`;
-		case "truncate":
-			return `path: ${args.path}`;
-		default:
-			return JSON.stringify(args, null, 2);
-	}
+function formatToolArgs(_toolName: string, args: Record<string, unknown>): string {
+	return JSON.stringify(args, null, 2);
 }
 
 // ── Main Event Handler ─────────────────────────────────────────────
@@ -50,16 +37,21 @@ export function handleAgentEvent(event: AgentEvent): void {
 			break;
 
 		case "message_end":
-			if (event.message.role === "assistant" && event.message.stopReason === "error") {
-				process.stdout.write(
-					`\n${colorText("Error", color.error)} ${event.message.stopReason}: ${event.message.errorMessage}\n`,
-				);
+			if (event.message.role === "assistant") {
+				const reason = event.message.stopReason;
+				if (reason === "error") {
+					process.stdout.write(`\n${colorText("Error", color.error)} ${event.message.errorMessage}\n`);
+				} else if (reason === "length") {
+					process.stdout.write(`\n${colorText("Length", color.error)} Output truncated (max tokens reached)\n`);
+				} else if (reason === "aborted") {
+					process.stdout.write(`\n${colorText("Aborted", color.error)} Agent run was cancelled\n`);
+				}
 			}
 			break;
 
 		case "tool_execution_start":
 			process.stdout.write(`\n${colorText("Tool", color.tool)}: ${event.toolName}\n`);
-			process.stdout.write(`  ${formatToolArgs(event.toolName, event.args)}\n`);
+			process.stdout.write(`${formatToolArgs(event.toolName, event.args)}\n`);
 			break;
 
 		case "tool_execution_end":
@@ -98,12 +90,6 @@ function handleMessageUpdate(event: Extract<AgentEvent, { type: "message_update"
 
 		case "thinking_end":
 			process.stdout.write("\n");
-			break;
-
-		case "error":
-			process.stdout.write(
-				`\n${colorText("Stream Error", color.error)} ${assistantEvent.reason}: ${assistantEvent.error.errorMessage}\n`,
-			);
 			break;
 	}
 }
