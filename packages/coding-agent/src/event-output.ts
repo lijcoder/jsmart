@@ -62,6 +62,21 @@ export function handleAgentEvent(event: AgentEvent): void {
 				process.stdout.write(`State: ${colorFg("success", "\x1b[32m")}\n`);
 			}
 			break;
+		case "agent_end": {
+			// 提取 event的messages的最后一条消息
+			const lastMessage = event.messages[event.messages.length - 1];
+			if (lastMessage.role === "assistant") {
+				const reason = lastMessage.stopReason;
+				if (reason === "error") {
+					process.stdout.write(`\n${colorText("Error", color.error)} ${lastMessage.errorMessage}\n`);
+				} else if (reason === "length") {
+					process.stdout.write(`\n${colorText("Length", color.error)} Output truncated (max tokens reached)\n`);
+				} else if (reason === "aborted") {
+					process.stdout.write(`\n${colorText("Aborted", color.error)} Agent run was cancelled\n`);
+				}
+			}
+			break;
+		}
 	}
 }
 
