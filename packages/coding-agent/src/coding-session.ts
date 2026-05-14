@@ -1,4 +1,10 @@
-import { AgentSession, DefaultResourceLoader, ModelManager, SessionManager } from "@jsmart/jsmart-harness";
+import {
+	AgentSession,
+	DefaultResourceLoader,
+	loadPromptTemplateFromDirs,
+	ModelManager,
+	SessionManager,
+} from "@jsmart/jsmart-harness";
 import type { ResolvedConfig } from "./config.js";
 import { generateSessionFilePath } from "./config.js";
 
@@ -28,6 +34,9 @@ export class CodingSession {
 		const providerName = defaultModel?.provider ?? "openai";
 		const modelName = defaultModel?.model ?? "gpt-4o";
 
+		// 从项目 .jsmart 目录加载模板，没有则从全局目录加载
+		const promptTemplate = loadPromptTemplateFromDirs([config.projectDirPath, config.globalDir]);
+
 		// Create agent session
 		this.agentSession = new AgentSession(
 			projectDir,
@@ -36,6 +45,9 @@ export class CodingSession {
 			modelManager,
 			providerName,
 			modelName,
+			{
+				promptTemplate: promptTemplate ?? undefined,
+			},
 		);
 	}
 

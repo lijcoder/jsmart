@@ -20,6 +20,13 @@ export type AgentSessionEvent = AgentEvent;
 /** Listener function for agent session events */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
 
+export interface AgentSessionOptions {
+	/** 自定义提示词模板 */
+	promptTemplate?: string;
+	/** 自定义内容，替换 {{custom}} 占位符 */
+	customContent?: string | (() => string);
+}
+
 export class AgentSession {
 	private sessionManager: SessionManager;
 	private resourceLoader: ResourceLoader;
@@ -46,6 +53,7 @@ export class AgentSession {
 		modelManager: ModelManager,
 		providerName: string,
 		modelName: string,
+		options?: AgentSessionOptions,
 	) {
 		this.sessionManager = sessionManager;
 		this.resourceLoader = resourceLoader;
@@ -73,8 +81,11 @@ export class AgentSession {
 			workspace: workspace,
 			selectedTools: tools,
 			skills: skills,
+			template: options?.promptTemplate,
+			customContent: options?.customContent,
 		});
 		this.agent.state.systemPrompt = systemPrompt;
+		console.log(this.agent.state.systemPrompt);
 		this.agent.subscribe(this._handleAgentEvent);
 	}
 

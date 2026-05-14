@@ -1,7 +1,12 @@
 // Harness core - agent session management, tools, compaction, etc.
 // For gateway/channel/routing functionality, import from @jsmart/jsmart-gateway
 
-export type { AgentSessionEvent, AgentSessionEventListener, ResultState } from "./agent-session.js";
+export type {
+	AgentSessionEvent,
+	AgentSessionEventListener,
+	AgentSessionOptions,
+	ResultState,
+} from "./agent-session.js";
 export { AgentSession } from "./agent-session.js";
 export type { CompactionResult, CompactionSettings, CutPointResult } from "./compaction.js";
 export {
@@ -18,8 +23,14 @@ export type { ExecOptions, ExecResult, Executor } from "./executor.js";
 export { createExecutor, HostExecutor } from "./executor.js";
 
 export { ModelManager } from "./model-manager.js";
-export type { BuildSystemPromptOptions } from "./prompts.js";
-export { buildSystemPrompt, formatSkillsForPrompt } from "./prompts.js";
+export type { BuildSystemPromptOptions, PromptVariable } from "./prompts.js";
+export {
+	buildSystemPrompt,
+	DEFAULT_SYSTEM_PROMPT_TEMPLATE,
+	formatSkillsForPrompt,
+	loadPromptTemplate,
+	loadPromptTemplateFromDirs,
+} from "./prompts.js";
 export type { DefaultResourceLoaderOptions, ResourceLoader } from "./resource-manager.js";
 export { DefaultResourceLoader } from "./resource-manager.js";
 export type {

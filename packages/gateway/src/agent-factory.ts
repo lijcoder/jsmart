@@ -1,4 +1,10 @@
-import { AgentSession, DefaultResourceLoader, type ModelManager, SessionManager } from "@jsmart/jsmart-harness";
+import {
+	AgentSession,
+	DefaultResourceLoader,
+	loadPromptTemplate,
+	type ModelManager,
+	SessionManager,
+} from "@jsmart/jsmart-harness";
 import { existsSync, mkdirSync } from "fs";
 import type { Settings } from "./config.js";
 import { resolveAgentSessionsDir, resolveAgentWorkspaceDir, resolveSessionFile } from "./config.js";
@@ -48,6 +54,9 @@ export function createAgentSession(
 	});
 	const sessionManager = new SessionManager(true, sessionFile);
 
+	// 从工作目录加载 prompt_template.md，没有则使用内置默认模板
+	const promptTemplate = loadPromptTemplate(workspaceDir);
+
 	return new AgentSession(
 		workspaceDir,
 		sessionManager,
@@ -55,6 +64,9 @@ export function createAgentSession(
 		modelManager,
 		template.model.provider,
 		template.model.model,
+		{
+			promptTemplate: promptTemplate ?? undefined,
+		},
 	);
 }
 
