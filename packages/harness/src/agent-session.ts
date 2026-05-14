@@ -85,7 +85,6 @@ export class AgentSession {
 			customContent: options?.customContent,
 		});
 		this.agent.state.systemPrompt = systemPrompt;
-		console.log(this.agent.state.systemPrompt);
 		this.agent.subscribe(this._handleAgentEvent);
 	}
 
