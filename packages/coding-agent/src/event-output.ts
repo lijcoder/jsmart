@@ -57,11 +57,12 @@ export function handleAgentEvent(event: AgentEvent): void {
 
 		case "tool_execution_end":
 			if (event.isError) {
-				process.stdout.write(`State: ${colorFg("error", "\x1b[31m")}\n${event.result}\n`);
+				process.stdout.write(`State: ${colorFg("error", "\x1b[31m")}\n${JSON.stringify(event.result, null, 2)}\n`);
 			} else {
 				process.stdout.write(`State: ${colorFg("success", "\x1b[32m")}\n`);
 			}
 			break;
+
 		case "agent_end": {
 			// 提取 event的messages的最后一条消息
 			const lastMessage = event.messages[event.messages.length - 1];
