@@ -3,8 +3,8 @@
  * Gateway CLI entry point.
  *
  * Usage:
- *   npx tsx src/cli.ts              # uses ~/.jie
- *   npx tsx src/cli.ts --mode debug # uses ~/.jie-debug
+ *   npx tsx src/cli.ts              # uses ~/.jsmart
+ *   npx tsx src/cli.ts --mode debug # uses ~/.jsmart-debug
  */
 
 import { homedir } from "os";
@@ -17,7 +17,7 @@ function resolveRootDir(): string {
 	const modeIndex = process.argv.indexOf("--mode");
 	const mode = modeIndex !== -1 ? process.argv[modeIndex + 1] : undefined;
 	const isDebug = mode === "debug";
-	const dirName = isDebug ? ".jie-debug" : ".jie";
+	const dirName = isDebug ? ".jsmart-debug" : ".jsmart";
 	return join(homedir(), dirName);
 }
 

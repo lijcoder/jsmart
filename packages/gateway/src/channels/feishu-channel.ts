@@ -320,7 +320,7 @@ function buildCardMessage(text: string): unknown {
 		schema: "2.0",
 		config: { width_mode: "fill" },
 		header: {
-			title: { tag: "plain_text", content: "AI Agent" },
+			title: { tag: "plain_text", content: "JSmart" },
 			template: "blue",
 		},
 		body: {
