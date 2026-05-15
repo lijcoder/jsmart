@@ -106,7 +106,7 @@ function resolveCustomContent(customContent?: string | (() => string)): string {
  * 支持条件语法：
  * - {{#if variable}}...{{/if}} - 变量有值时显示
  * - {{#unless variable}}...{{/unless}} - 变量无值时显示
- * - {{#if variable}}...{{else}}...{{/if}} - 支持 else 分支
+ * - {{#if variable}}...{{#else}}...{{/if}} - 支持 else 分支
  *
  * 只替换模板中实际存在的占位符，没有的不会添加。
  */
@@ -133,14 +133,14 @@ function replacePlaceholders(template: string, sections: Record<PromptVariable, 
 
 /**
  * 处理模板中的条件块。
- * 支持 {{#if var}}...{{/if}}、{{#unless var}}...{{/unless}}、{{else}}
+ * 支持 {{#if var}}...{{/if}}、{{#unless var}}...{{/unless}}、{{#else}}
  */
 function processConditionals(template: string, sections: Record<PromptVariable, string>): string {
 	let result = template;
 
-	// 处理 {{#if variable}}...{{else}}...{{/if}} 和 {{#if variable}}...{{/if}}
+	// 处理 {{#if variable}}...{{#else}}...{{/if}} 和 {{#if variable}}...{{/if}}
 	result = result.replace(
-		/\{\{#if\s+(\w+)\}\}([\s\S]*?)(?:\{\{else\}\}([\s\S]*?))?\{\{\/if\}\}/g,
+		/\{\{#if\s+(\w+)\}\}([\s\S]*?)(?:\{\{#else\}\}([\s\S]*?))?\{\{\/if\}\}/g,
 		(_match, variable, ifContent, elseContent) => {
 			const value = sections[variable as PromptVariable];
 			const hasValue = value !== undefined && value !== "";

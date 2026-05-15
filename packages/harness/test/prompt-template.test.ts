@@ -211,13 +211,13 @@ Date: {{date}}`;
 		expect(prompt).toContain("Date:");
 	});
 
-	it("should handle {{#if}}...{{else}}...{{/if}}", () => {
+	it("should handle {{#if}}...{{#else}}...{{/if}}", () => {
 		const template = `Role here.
 
 {{#if skills}}
 ## Skills Available
 {{skills}}
-{{else}}
+{{#else}}
 ## No Skills
 Use your general knowledge to help.
 {{/if}}

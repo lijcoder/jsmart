@@ -36,7 +36,7 @@
 |------|------|
 | `{{#if variable}}...{{/if}}` | 变量有值时显示内容 |
 | `{{#unless variable}}...{{/unless}}` | 变量无值时显示内容 |
-| `{{#if variable}}...{{else}}...{{/if}}` | 支持 else 分支 |
+| `{{#if variable}}...{{#else}}...{{/if}}` | 支持 else 分支 |
 
 **示例：**
 
@@ -44,7 +44,7 @@
 {{#if skills}}
 ## Available Skills
 {{skills}}
-{{else}}
+{{#else}}
 No skills loaded. Use general tools to help.
 {{/if}}
 
@@ -126,7 +126,7 @@ You are an expert software engineer assistant.
 {{#if skills}}
 ## Available Skills
 {{skills}}
-{{else}}
+{{#else}}
 No specialized skills loaded.
 {{/if}}
 
