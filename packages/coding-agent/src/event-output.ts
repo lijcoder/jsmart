@@ -37,19 +37,6 @@ export function handleAgentEvent(event: AgentEvent): void {
 			}
 			break;
 
-		case "message_end":
-			if (event.message.role === "assistant") {
-				const reason = event.message.stopReason;
-				if (reason === "error") {
-					process.stdout.write(`\n${colorText("Error", color.error)} ${event.message.errorMessage}\n`);
-				} else if (reason === "length") {
-					process.stdout.write(`\n${colorText("Length", color.error)} Output truncated (max tokens reached)\n`);
-				} else if (reason === "aborted") {
-					process.stdout.write(`\n${colorText("Aborted", color.error)} Agent run was cancelled\n`);
-				}
-			}
-			break;
-
 		case "tool_execution_start":
 			process.stdout.write(`\n${colorText("Tool", color.tool)}: ${event.toolName}\n`);
 			process.stdout.write(`${formatToolArgs(event.toolName, event.args)}\n`);
