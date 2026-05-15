@@ -106,7 +106,7 @@ async function main(): Promise<void> {
 
 	function getPromptText(): string {
 		if (isMultilineMode) return "...";
-		if (isAgentRunning) return "⏳";
+		if (isAgentRunning) return "";
 		return ">";
 	}
 

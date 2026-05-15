@@ -5,17 +5,17 @@ import type { AgentEvent } from "@jsmart/jsmart-agent-core";
 type ThemeItem = { bg: string; fg: string; text: string };
 
 const color = {
-	tool: { bg: "\x1b[43m", fg: "\x1b[30m", text: "Tool" },
-	result: { bg: "\x1b[42m", fg: "\x1b[97m", text: "Result" },
-	thinking: { bg: "\x1b[47m", fg: "\x1b[30m", text: "Thinking" },
-	error: { bg: "\x1b[41m", fg: "\x1b[97m", text: "Error" },
-	user: { bg: "\x1b[44m", fg: "\x1b[97m", text: "User" },
+	tool: { bg: "\x1b[48;5;253m", fg: "\x1b[93m", text: "Tool" },
+	result: { bg: "\x1b[48;5;253m", fg: "\x1b[94m", text: "Result" },
+	thinking: { bg: "\x1b[48;5;253m", fg: "\x1b[90m", text: "Thinking" },
+	error: { bg: "\x1b[48;5;253m", fg: "\x1b[91m", text: "Error" },
+	user: { bg: "\x1b[48;5;253m", fg: "\x1b[92m", text: "User" },
 };
 
 const colorReset = "\x1b[0m";
 
 function colorText(text: string, theme: ThemeItem): string {
-	return `${theme.bg}${theme.fg}${text}${colorReset}`;
+	return `${theme.bg}${theme.fg} ${text} ${colorReset}`;
 }
 
 function colorFg(text: string, fgColor: string): string {
@@ -38,7 +38,7 @@ export function handleAgentEvent(event: AgentEvent): void {
 			break;
 
 		case "tool_execution_start":
-			process.stdout.write(`\n${colorText("Tool", color.tool)}: ${event.toolName}\n`);
+			process.stdout.write(`\n${colorText("Tool", color.tool)} ${event.toolName}\n`);
 			process.stdout.write(`${formatToolArgs(event.toolName, event.args)}\n`);
 			break;
 
