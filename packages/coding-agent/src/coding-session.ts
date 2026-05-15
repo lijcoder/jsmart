@@ -5,6 +5,8 @@ import {
 	ModelManager,
 	SessionManager,
 } from "@jsmart/jsmart-harness";
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
 import type { ResolvedConfig } from "./config.js";
 import { generateSessionFilePath } from "./config.js";
 
@@ -37,6 +39,9 @@ export class CodingSession {
 		// 从项目 .jsmart 目录加载模板，没有则从全局目录加载
 		const promptTemplate = loadPromptTemplateFromDirs([config.projectDirPath, config.globalDir]);
 
+		// 加载项目根目录下的 AGENTS.md 作为自定义内容
+		const customContent = loadAgentsFile(config.projectDir);
+
 		// Create agent session
 		this.agentSession = new AgentSession(
 			projectDir,
@@ -47,6 +52,7 @@ export class CodingSession {
 			modelName,
 			{
 				promptTemplate: promptTemplate ?? undefined,
+				customContent: customContent ?? undefined,
 			},
 		);
 	}
@@ -109,5 +115,18 @@ export class CodingSession {
 	/** Get message count */
 	messageCount(): number {
 		return this.agentSession.messageCount();
+	}
+}
+
+/** Load AGENTS.md from the given directory, returning its content or null */
+function loadAgentsFile(dir: string): string | null {
+	const agentsPath = join(dir, "AGENTS.md");
+	if (!existsSync(agentsPath)) {
+		return null;
+	}
+	try {
+		return readFileSync(agentsPath, "utf-8");
+	} catch {
+		return null;
 	}
 }
