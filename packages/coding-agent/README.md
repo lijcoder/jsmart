@@ -79,6 +79,8 @@ The CLI automatically detects the project directory (looks for `.jsmart/` or `.g
 
 Project settings override global settings. `skillPaths` are merged (global + project).
 
+The directory `<project>/.jsmart/skills` is always loaded as a skill path automatically, no configuration needed.
+
 ### Model Configuration (`models.json`)
 
 Models are configured in `models.json` (project or global):

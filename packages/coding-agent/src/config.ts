@@ -151,6 +151,9 @@ function resolveSkillPaths(settings: CodingSettings, _projectDir: string, projec
 	const skillPaths = settings.skillPaths ?? [];
 	const resolved: string[] = [];
 
+	// Always include project .jsmart/skills directory as the first skill path
+	resolved.push(resolve(projectDirPath, "skills"));
+
 	for (const p of skillPaths) {
 		if (p.startsWith(".") || p.startsWith("./")) {
 			// Relative path: resolve against project .jsmart/ directory
