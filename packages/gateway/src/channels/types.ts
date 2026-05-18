@@ -12,8 +12,13 @@ export interface MessageSource {
 	metadata?: Record<string, unknown>;
 }
 
+/** Content types for incoming messages */
+export type MessageContent =
+	| { type: "text"; text: string }
+	| { type: "file"; text?: string; filePath: string; fileName: string };
+
 /** Callback that Channel calls when it receives a message */
-export type OnMessage = (source: MessageSource, content: string) => Promise<void>;
+export type OnMessage = (source: MessageSource, content: MessageContent) => Promise<void>;
 
 /** Channel interface: communication protocol abstraction */
 export interface Channel {

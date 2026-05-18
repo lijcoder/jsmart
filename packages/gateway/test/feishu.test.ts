@@ -23,10 +23,10 @@ wsClient.start({
 			} = data;
 			console.log(data);
 			let file_key: string;
+			let file_name: string;
 			if (message_type === "file") {
 				file_key = JSON.parse(content).file_key;
-			} else if (message_type === "image") {
-				file_key = JSON.parse(content).image_key;
+				file_name = JSON.parse(content).file_name;
 			} else {
 				return;
 			}
@@ -41,7 +41,7 @@ wsClient.start({
 					},
 				})
 				.then((res) => {
-					res.writeFile(`${file_key}.${message_type}`);
+					res.writeFile(`/tmp/agent_test/${file_name}`);
 				})
 				.catch((e) => {
 					console.error(e);

@@ -1,10 +1,14 @@
 import type { AgentSessionEvent } from "@jsmart/jsmart-harness";
 import * as Lark from "@larksuiteoapi/node-sdk";
+import { randomUUID } from "crypto";
+import { existsSync, mkdirSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import type { Route } from "../config.js";
 import { logger } from "../logger.js";
 import type { ChannelFactory } from "./registry.js";
 import { registerChannelFactory } from "./registry.js";
-import type { Channel, MessageSource, OnMessage } from "./types.js";
+import type { Channel, MessageContent, MessageSource, OnMessage } from "./types.js";
 
 export interface FeishuChannelOptions {
 	appId: string;
@@ -59,19 +63,39 @@ export class FeishuChannel implements Channel {
 		try {
 			this.wsClient.start({
 				eventDispatcher: new Lark.EventDispatcher({}).register({
+					"im.message.reaction.created_v1": (_data) => {},
 					"im.message.receive_v1": async (data) => {
 						const eventId = data.event_id;
-						const content = data.message?.content?.trim();
+						const rawContent = data.message?.content?.trim();
+						const messageType = data.message?.message_type;
 						const chatId = data.message?.chat_id;
 						const messageId = data.message?.message_id;
 						const threadId = data.message?.thread_id;
 
-						if (!content) return;
+						logger.info(
+							"[Feishu] original Message received: chatId=%s, threadId=%s, messageId=%s, type=%s, content=%s",
+							chatId,
+							threadId,
+							messageId,
+							messageType,
+							rawContent,
+						);
+
+						if (!rawContent || !messageId || !chatId) return;
 						if (eventId && this._hasEventId(eventId)) return;
 
 						if (eventId) {
 							this._recordEventId(eventId);
 						}
+
+						// Resolve message text — downloads resources for non-text types
+						const resolveResult = await this._resolveMessageContent(messageType, rawContent, messageId);
+						if (!resolveResult.success) {
+							logger.error("[Feishu] Message resolution failed: %s", resolveResult.error);
+							await this._sendText({ chatId, messageId }, `[Error] ${resolveResult.error}`);
+							return;
+						}
+						const content = resolveResult.content;
 
 						// Match route based on chatId
 						const route = this._matchRoute(chatId);
@@ -86,19 +110,10 @@ export class FeishuChannel implements Channel {
 						// sessionId: threadMode on → "chat_id:thread_id" for threads, "chat_id" otherwise
 						const sessionId = threadMode && isThread ? `${chatId}:${threadId}` : (chatId ?? route.id);
 
-						logger.info(
-							"[Feishu] Message received: chatId=%s, routeId=%s, thread=%s, sessionId=%s, content=%s",
-							chatId,
-							route.id,
-							isThread,
-							sessionId,
-							content,
-						);
-
 						// Reject message if the session is already running a prompt
 						if (this.activeSources.has(sessionId)) {
 							logger.info("[Feishu] Session %s is busy, dropping message with SLEEP reaction", sessionId);
-							await this._addReaction({ chatId: chatId ?? "", messageId }, "SLEEP");
+							await this._addReaction({ chatId, messageId }, "SLEEP");
 							return;
 						}
 
@@ -117,7 +132,7 @@ export class FeishuChannel implements Channel {
 						this.activeSources.set(sessionId, source);
 
 						// Add "Get" reaction to indicate the message is being processed
-						await this._addReaction({ chatId: chatId ?? "", messageId }, "Get");
+						await this._addReaction({ chatId, messageId }, "Get");
 
 						// Fire-and-forget: return immediately so SDK sends ACK to Feishu
 						this.onMessage?.(source, content).catch((err) => {
@@ -129,6 +144,83 @@ export class FeishuChannel implements Channel {
 			});
 		} catch (error) {
 			logger.error("[Feishu] WSClient failed to start: %s", error);
+		}
+	}
+
+	/**
+	 * Resolve the text content of an incoming message.
+	 * - Text messages: extracts the "text" field from the JSON content.
+	 * - Image/file/audio/media messages: downloads the resource, saves to a temp
+	 *   file, and returns a description with the file path for the agent.
+	 */
+	private async _resolveMessageContent(
+		messageType: string,
+		rawContent: string,
+		messageId: string,
+	): Promise<{ success: true; content: MessageContent } | { success: false; error: string }> {
+		let parsed: Record<string, unknown>;
+		try {
+			parsed = JSON.parse(rawContent);
+		} catch {
+			return { success: true, content: { type: "text", text: rawContent } };
+		}
+
+		// Text message: extract the text field
+		if (messageType === "text") {
+			const text = parsed.text && typeof parsed.text === "string" ? parsed.text : rawContent;
+			return { success: true, content: { type: "text", text } };
+		}
+
+		// File message: download the file
+		if (messageType === "file") {
+			const fileKey = parsed.file_key as string | undefined;
+			if (!fileKey) {
+				return { success: true, content: { type: "text", text: rawContent } };
+			}
+
+			const fileName = (parsed.file_name as string) || `feishu_file_${randomUUID()}`;
+			const result = await this._downloadFile(fileKey, fileName, tmpdir(), messageId);
+
+			if (!result.success) {
+				return { success: false, error: `Failed to download file ${fileName}: ${result.error}` };
+			}
+
+			return { success: true, content: { type: "file", filePath: result.filePath, fileName } };
+		}
+
+		// For unsupported types, return as text
+		return { success: true, content: { type: "text", text: rawContent } };
+	}
+
+	private async _downloadFile(
+		fileKey: string,
+		fileName: string,
+		filePath: string,
+		messageId: string,
+	): Promise<{ success: true; filePath: string } | { success: false; error: string }> {
+		if (!existsSync(filePath)) {
+			mkdirSync(filePath, { recursive: true });
+		}
+		const fileFullPath = join(filePath, fileName);
+		try {
+			const res = await this.client?.im.v1.messageResource.get({
+				params: {
+					type: "file",
+				},
+				path: {
+					message_id: messageId,
+					file_key: fileKey,
+				},
+			});
+			if (!res) {
+				return { success: false, error: "client not available" };
+			}
+			await res.writeFile(fileFullPath);
+			return { success: true, filePath: fileFullPath };
+		} catch (e) {
+			const errMsg = this._extractApiError(e);
+			logger.error("[Feishu] Failed to download file: %s", errMsg);
+			return { success: false, error: errMsg };
 		}
 	}
 

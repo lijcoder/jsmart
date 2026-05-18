@@ -1,8 +1,9 @@
 import type { AgentSession, AgentSessionEvent } from "@jsmart/jsmart-harness";
 import { ModelManager } from "@jsmart/jsmart-harness";
+import { existsSync, mkdirSync, renameSync } from "fs";
 import { createAgentSession } from "./agent-factory.js";
 import { getGlobalRegistry } from "./channels/registry.js";
-import type { Channel, MessageSource } from "./channels/types.js";
+import type { Channel, MessageContent, MessageSource } from "./channels/types.js";
 import type { Settings } from "./config.js";
 import { logger } from "./logger.js";
 
@@ -78,7 +79,7 @@ export class Gateway {
 	}
 
 	/** Handle an incoming message from a channel */
-	private async _handleMessage(source: MessageSource, content: string): Promise<void> {
+	private async _handleMessage(source: MessageSource, content: MessageContent): Promise<void> {
 		// Find the route to determine which agent to use
 		const route = _findRoute(source.routeId, this.settings);
 		if (!route) {
@@ -110,8 +111,45 @@ export class Gateway {
 			this.unsubscribes.set(sessionKey, unsub);
 		}
 
-		// Forward message to the session
-		await session.prompt(content);
+		// Format content into prompt text for the agent
+		const promptText = this._formatMessageContent(content, session.getWorkspace());
+		await session.prompt(promptText);
+	}
+
+	/** Format a MessageContent object into prompt text for the agent */
+	private _formatMessageContent(content: MessageContent, workspaceDir: string): string {
+		switch (content.type) {
+			case "text":
+				return content.text;
+			case "file": {
+				const result = this._moveToWorkspace(content.filePath, content.fileName, workspaceDir);
+				if (!result.success) {
+					return `[FILE] User uploaded file ${content.fileName}. Failed to move to workspace: ${result.error}. Do not take action, wait for user instructions.`;
+				}
+				return `[FILE] User uploaded file ${content.fileName} and saved it to [${result.filePath}]. Do not take action, wait for user instructions.`;
+			}
+		}
+	}
+
+	/** Move a file into the workspace directory. Returns the new path or the original temp path on failure. */
+	private _moveToWorkspace(
+		tempPath: string,
+		fileName: string,
+		workspaceDir: string,
+	): { success: boolean; filePath: string; error?: string } {
+		if (!existsSync(workspaceDir)) {
+			mkdirSync(workspaceDir, { recursive: true });
+		}
+		const destPath = `${workspaceDir}/${fileName}`;
+		try {
+			renameSync(tempPath, destPath);
+			logger.info("[Gateway] Moved file to workspace: %s -> %s", tempPath, destPath);
+			return { success: true, filePath: destPath };
+		} catch (err) {
+			const errMsg = err instanceof Error ? err.message : String(err);
+			logger.error("[Gateway] Failed to move file to workspace: %s", errMsg);
+			return { success: false, filePath: tempPath, error: errMsg };
+		}
 	}
 
 	/** Handle events from an AgentSession and forward to the channel */

@@ -28,6 +28,7 @@ export interface AgentSessionOptions {
 }
 
 export class AgentSession {
+	private workspace: string;
 	private sessionManager: SessionManager;
 	private resourceLoader: ResourceLoader;
 
@@ -55,6 +56,7 @@ export class AgentSession {
 		modelName: string,
 		options?: AgentSessionOptions,
 	) {
+		this.workspace = workspace;
 		this.sessionManager = sessionManager;
 		this.resourceLoader = resourceLoader;
 		this.modelManager = modelManager;
@@ -164,6 +166,10 @@ export class AgentSession {
 	/** Check if the agent is currently processing a prompt. */
 	isProcessing(): boolean {
 		return this.agent.state.isStreaming;
+	}
+
+	getWorkspace(): string {
+		return this.workspace;
 	}
 
 	messageCount(): number {

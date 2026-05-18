@@ -5,7 +5,6 @@ export { createAgentSession } from "./agent-factory.js";
 export type {
 	Channel,
 	ChannelFactory,
-	ConsoleChannelOptions,
 	FeishuChannelOptions,
 	MessageSource,
 	OnMessage,
@@ -13,8 +12,6 @@ export type {
 // Channels
 export {
 	ChannelRegistry,
-	ConsoleChannel,
-	ConsoleChannelFactory,
 	FeishuChannel,
 	FeishuChannelFactory,
 	getGlobalRegistry,
