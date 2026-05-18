@@ -18,7 +18,7 @@ export interface ResultState<T> {
 export type AgentSessionEvent = AgentEvent;
 
 /** Listener function for agent session events */
-export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
+export type AgentSessionEventListener = (event: AgentSessionEvent, signal: AbortSignal) => void;
 
 export interface AgentSessionOptions {
 	/** 自定义提示词模板 */
@@ -89,20 +89,17 @@ export class AgentSession {
 	}
 
 	/** Internal handler for agent events - shared by subscribe and reconnect */
-	private _handleAgentEvent = (event: AgentEvent): void => {
+	private _handleAgentEvent = (event: AgentEvent, signal: AbortSignal): void => {
 		this._agentEventQueue = this._agentEventQueue.then(
-			() => this._processAgentEvent(event),
-			() => this._processAgentEvent(event),
+			() => this._processAgentEvent(event, signal),
+			() => this._processAgentEvent(event, signal),
 		);
 
 		// Keep queue alive if an event handler fails
 		this._agentEventQueue.catch(() => {});
 	};
 
-	private async _processAgentEvent(event: AgentEvent): Promise<void> {
-		// Notify all listeners
-		this._emit(event);
-
+	private async _processAgentEvent(event: AgentEvent, signal: AbortSignal): Promise<void> {
 		// Handle session persistence
 		if (event.type === "message_end") {
 			if (
@@ -129,12 +126,15 @@ export class AgentSession {
 			this._lastAssistantMessage = undefined;
 			await this._checkCompaction(msg);
 		}
+
+		// Notify all listeners
+		this._emit(event, signal);
 	}
 
 	/** Emit an event to all listeners */
-	private _emit(event: AgentSessionEvent): void {
+	private _emit(event: AgentSessionEvent, signal: AbortSignal): void {
 		for (const l of this._eventListeners) {
-			l(event);
+			l(event, signal);
 		}
 	}
 

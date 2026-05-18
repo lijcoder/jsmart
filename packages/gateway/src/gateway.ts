@@ -102,8 +102,8 @@ export class Gateway {
 			this.sessions.set(sessionKey, session);
 
 			// Subscribe to session events for response routing
-			const unsub = session.subscribe((event) => {
-				this._handleSessionEvent(source, event).catch((err) => {
+			const unsub = session.subscribe((event, signal) => {
+				this._handleSessionEvent(source, event, signal).catch((err) => {
 					logger.error("[Gateway] Session event handling failed: %s", err);
 				});
 			});
@@ -115,10 +115,14 @@ export class Gateway {
 	}
 
 	/** Handle events from an AgentSession and forward to the channel */
-	private async _handleSessionEvent(source: MessageSource, event: AgentSessionEvent): Promise<void> {
+	private async _handleSessionEvent(
+		source: MessageSource,
+		event: AgentSessionEvent,
+		signal: AbortSignal,
+	): Promise<void> {
 		const channel = this.channels.get(source.channelId);
 		if (!channel) return;
-		await channel.sendEvent?.(source, event);
+		await channel.sendEvent?.(source, event, signal);
 	}
 }
 
