@@ -121,6 +121,7 @@ export class FeishuChannel implements Channel {
 
 						// Fire-and-forget: return immediately so SDK sends ACK to Feishu
 						this.onMessage?.(source, content).catch((err) => {
+							this.activeSources.delete(sessionId);
 							logger.error("[Feishu] Message handling failed: %s", err);
 						});
 					},
@@ -250,11 +251,22 @@ export class FeishuChannel implements Channel {
 			return;
 		}
 
-		// Send "done" reaction when the agent run completes, then release the session
+		// Send "failed" reaction + error text if the last assistant message has an error.
+		// Otherwise send "done" reaction. Always release the session.
 		if (event.type === "agent_end") {
+			// Check the last message for error info. We have to wait until the end of the agent run to know if there were any errors,
+			const lastMsg = event.messages[event.messages.length - 1];
+			if (lastMsg && lastMsg.role === "assistant") {
+				if (lastMsg.stopReason === "length" || lastMsg.stopReason === "error" || lastMsg.stopReason === "aborted") {
+					const errMsg = `[Error](${lastMsg.stopReason}) ${lastMsg.errorMessage ?? ""}`;
+					await this._sendText(meta, errMsg);
+				}
+			}
+			// send done reaction
 			if (meta.messageId) {
 				await this._addReaction(meta, "DONE");
 			}
+			// Release the session so new messages can be processed.
 			this.activeSources.delete(source.sessionId);
 			return;
 		}
@@ -262,17 +274,15 @@ export class FeishuChannel implements Channel {
 		// Send final assistant text message.
 		// Thinking, tool calls, and intermediate events are not forwarded.
 		if (event.type === "message_end" && event.message.role === "assistant") {
-			const text = this._extractText(event.message.content);
-			if (text) {
-				await this._sendText(meta, text);
+			if (event.message.stopReason === "stop") {
+				const finalMsg = this._extractText(event.message.content);
+				if (finalMsg) {
+					await this._sendText(meta, finalMsg);
+				} else {
+					await this._sendText(meta, "[No text content to display]");
+				}
 			}
-			if (event.message.stopReason === "error") {
-				const errMsg = event.message.errorMessage ?? "Unknown error";
-				await this._sendText(meta, `[Error] ${errMsg}`);
-			}
-			if (event.message.stopReason === "length") {
-				await this._sendText(meta, "[Error] Message length exceeds limit.");
-			}
+			return;
 		}
 	}
 
