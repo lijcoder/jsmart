@@ -5,7 +5,9 @@ If the user did not give you a concrete task in their first message,
 read README.md, then ask which module(s) to work on. Based on the answer, read the relevant README.md files in parallel.
 - packages/ai/README.md
 - packages/agent/README.md
+- packages/harness/README.md
 - packages/gateway/README.md
+- packages/coding-agent/README.md
 
 ## Code Quality
 - No `any` types unless absolutely necessary
@@ -25,72 +27,11 @@ read README.md, then ask which module(s) to work on. Based on the answer, read t
 - If you create or modify a test file, you MUST run that test file and iterate until it passes.
 - When writing tests, run them, identify issues in either the test or implementation, and iterate until fixed.
 - NEVER commit unless user asks
+- NEVER push unless user asks
 
-## GitHub Issues
-When reading issues:
-- Always read all comments on the issue
-- Use this command to get everything in one call:
-  ```bash
-  gh issue view <number> --json title,body,comments,labels,state
-  ```
-
-## OSS Weekend
-- If the user says `enable OSS weekend mode until X`, run `node scripts/oss-weekend.mjs --mode=close --end-date=YYYY-MM-DD --git` with the requested end date
-- If the user says `end OSS weekend mode`, run `node scripts/oss-weekend.mjs --mode=open --git`
-- The script updates `README.md` and `.github/oss-weekend.json`
-- With `--git`, the script stages only those OSS weekend files, commits them, and pushes them
-- During OSS weekend, `.github/workflows/oss-weekend-issues.yml` auto-closes new issues from non-maintainers, and `.github/workflows/pr-gate.yml` auto-closes PRs from approved non-maintainers with the weekend message
-
-When creating issues:
-- Add `pkg:*` labels to indicate which package(s) the issue affects
-  - Available labels: `pkg:agent`, `pkg:ai`, `pkg:harness`, `pkg:gateway`
-- If an issue spans multiple packages, add all relevant labels
-
-When posting issue/PR comments:
-- Write the full comment to a temp file and use `gh issue comment --body-file` or `gh pr comment --body-file`
-- Never pass multi-line markdown directly via `--body` in shell commands
-- Preview the exact comment text before posting
-- Post exactly one final comment unless the user explicitly asks for multiple comments
-- If a comment is malformed, delete it immediately, then post one corrected comment
-- Keep comments concise, technical, and in the user's tone
-
-When closing issues via commit:
-- Include `fixes #<number>` or `closes #<number>` in the commit message
-- This automatically closes the issue when the commit is merged
-
-## PR Workflow
-- Analyze PRs without pulling locally first
-- If the user approves: create a feature branch, pull PR, rebase on main, apply adjustments, commit, merge into main, push, close PR, and leave a comment in the user's tone
-- You never open PRs yourself. We work in feature branches until everything is according to the user's requirements, then merge into main, and push.
-
-## Tools
-- GitHub CLI for issues/PRs
-- Add package labels to issues/PRs: pkg:agent, pkg:ai, pkg:harness, pkg:gateway
-
-## Testing JSmart Interactive Mode with tmux
-
-To test JSmart's TUI in a controlled terminal environment:
-
-```bash
-# Create tmux session with specific dimensions
-tmux new-session -d -s jsmart-test -x 80 -y 24
-
-# Start JSmart from source
-tmux send-keys -t jsmart-test "cd /Users/badlogic/workspaces/jsmart-mono && ./jsmart-test.sh" Enter
-
-# Wait for startup, then capture output
-sleep 3 && tmux capture-pane -t jsmart-test -p
-
-# Send input
-tmux send-keys -t jsmart-test "your prompt here" Enter
-
-# Send special keys
-tmux send-keys -t jsmart-test Escape
-tmux send-keys -t jsmart-test C-o  # ctrl+o
-
-# Cleanup
-tmux kill-session -t jsmart-test
-```
+## **CRITICAL** Tool Usage Rules **CRITICAL**
+- NEVER use sed/cat to read a file or a range of a file. Always use the read tool (use offset + limit for ranged reads).
+- You MUST read every file you modify in full before editing.
 
 ## Style
 - Keep answers short and concise
@@ -115,10 +56,6 @@ Use these sections under `## [Unreleased]`:
 - Append to existing subsections (e.g., `### Fixed`), do not create duplicates
 - NEVER modify already-released version sections (e.g., `## [0.12.2]`)
 - Each version section is immutable once released
-
-### Attribution
-- **Internal changes (from issues)**: `Fixed foo bar ([#123](https://github.com/badlogic/jsmart-mono/issues/123))`
-- **External contributions**: `Added feature X ([#456](https://github.com/badlogic/jsmart-mono/pull/456) by [@username](https://github.com/username))`
 
 ## Adding a New LLM Provider (packages/ai)
 
@@ -179,17 +116,12 @@ For non-standard auth, create utility (e.g., `bedrock-utils.ts`) with credential
 
 The script handles: version bump, CHANGELOG finalization, commit, tag, publish, and adding new `[Unreleased]` sections.
 
-## **CRITICAL** Tool Usage Rules **CRITICAL**
-- NEVER use sed/cat to read a file or a range of a file. Always use the read tool (use offset + limit for ranged reads).
-- You MUST read every file you modify in full before editing.
-
 ## **CRITICAL** Git Rules for Parallel Agents **CRITICAL**
 
 Multiple agents may work on different files in the same worktree simultaneously. You MUST follow these rules:
 
 ### Committing
 - **ONLY commit files YOU changed in THIS session**
-- ALWAYS include `fixes #<number>` or `closes #<number>` in the commit message when there is a related issue or PR
 - NEVER use `git add -A` or `git add .` - these sweep up changes from other agents
 - ALWAYS use `git add <specific-file-paths>` listing only files you modified
 - Before committing, run `git status` and verify you are only staging YOUR files
@@ -216,8 +148,8 @@ git add packages/ai/CHANGELOG.md
 # 3. Commit
 git commit -m "fix(ai): description"
 
-# 4. Push (pull --rebase if needed, but NEVER reset/checkout)
-git pull --rebase && git push
+# 4. Push only when user explicitly asks
+git push
 ```
 
 ### If Rebase Conflicts Occur
