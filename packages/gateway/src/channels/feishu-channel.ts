@@ -247,7 +247,7 @@ export class FeishuChannel implements Channel {
 	private async _sendText(meta: FeishuMeta, content: string): Promise<void> {
 		if (!content.trim() || !this.client) return;
 
-		const msgContent = JSON.stringify(buildCardMessage(content));
+		const msgContent = JSON.stringify(this._buildCardMessage(content));
 
 		try {
 			if (meta.threadId) {
@@ -406,6 +406,20 @@ export class FeishuChannel implements Channel {
 		this._processedEventIds[this._writeIndex] = eventId;
 		this._writeIndex = (this._writeIndex + 1) % 10;
 	}
+
+	private _buildCardMessage(text: string): unknown {
+		return {
+			schema: "2.0",
+			config: { width_mode: "fill" },
+			header: {
+				title: { tag: "plain_text", content: "JSmart" },
+				template: "blue",
+			},
+			body: {
+				elements: [{ tag: "markdown", content: text }],
+			},
+		};
+	}
 }
 
 /** Factory for creating FeishuChannel from config */
@@ -416,17 +430,3 @@ export const FeishuChannelFactory: ChannelFactory<FeishuChannelOptions> = {
 
 // Auto-register on import
 registerChannelFactory(FeishuChannelFactory);
-
-function buildCardMessage(text: string): unknown {
-	return {
-		schema: "2.0",
-		config: { width_mode: "fill" },
-		header: {
-			title: { tag: "plain_text", content: "JSmart" },
-			template: "blue",
-		},
-		body: {
-			elements: [{ tag: "markdown", content: text }],
-		},
-	};
-}
