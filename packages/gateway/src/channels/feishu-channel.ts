@@ -92,7 +92,7 @@ export class FeishuChannel implements Channel {
 						const resolveResult = await this._resolveMessageContent(messageType, rawContent, messageId);
 						if (!resolveResult.success) {
 							logger.error("[Feishu] Message resolution failed: %s", resolveResult.error);
-							await this._sendText({ chatId, messageId }, `[Error] ${resolveResult.error}`);
+							await this._sendText({ chatId, messageId }, `[Error] ${resolveResult.error}`, false);
 							return;
 						}
 						const content = resolveResult.content;
@@ -244,10 +244,11 @@ export class FeishuChannel implements Channel {
 		this.activeSources.clear();
 	}
 
-	private async _sendText(meta: FeishuMeta, content: string): Promise<void> {
+	private async _sendText(meta: FeishuMeta, content: string, status?: boolean): Promise<void> {
 		if (!content.trim() || !this.client) return;
 
-		const msgContent = JSON.stringify(this._buildCardMessage(content));
+		const cardMessage = status === false ? this._buildCardMessageError(content) : this._buildCardMessage(content);
+		const msgContent = JSON.stringify(cardMessage);
 
 		try {
 			if (meta.threadId) {
@@ -351,8 +352,17 @@ export class FeishuChannel implements Channel {
 			if (lastMsg && lastMsg.role === "assistant") {
 				if (lastMsg.stopReason === "length" || lastMsg.stopReason === "error" || lastMsg.stopReason === "aborted") {
 					const errMsg = `[Error](${lastMsg.stopReason}) ${lastMsg.errorMessage ?? ""}`;
-					await this._sendText(meta, errMsg);
+					await this._sendText(meta, errMsg, false);
+				} else if (lastMsg.stopReason === "stop") {
+					const finalMsg = this._extractText(lastMsg.content);
+					if (finalMsg) {
+						await this._sendText(meta, finalMsg, true);
+					} else {
+						await this._sendText(meta, `[No text content to display]`, false);
+					}
 				}
+			} else {
+				await this._sendText(meta, `[last message role isn't assistant, it's ${lastMsg.role}]`, false);
 			}
 			// send done reaction
 			if (meta.messageId) {
@@ -360,20 +370,6 @@ export class FeishuChannel implements Channel {
 			}
 			// Release the session so new messages can be processed.
 			this.activeSources.delete(source.sessionId);
-			return;
-		}
-
-		// Send final assistant text message.
-		// Thinking, tool calls, and intermediate events are not forwarded.
-		if (event.type === "message_end" && event.message.role === "assistant") {
-			if (event.message.stopReason === "stop") {
-				const finalMsg = this._extractText(event.message.content);
-				if (finalMsg) {
-					await this._sendText(meta, finalMsg);
-				} else {
-					await this._sendText(meta, "[No text content to display]");
-				}
-			}
 			return;
 		}
 	}
@@ -407,13 +403,21 @@ export class FeishuChannel implements Channel {
 		this._writeIndex = (this._writeIndex + 1) % 10;
 	}
 
+	private _buildCardMessageError(text: string): unknown {
+		return this._doBuildCardMessage(text, "red");
+	}
+
 	private _buildCardMessage(text: string): unknown {
+		return this._doBuildCardMessage(text, "blue");
+	}
+
+	private _doBuildCardMessage(text: string, template: string): unknown {
 		return {
 			schema: "2.0",
 			config: { width_mode: "fill" },
 			header: {
 				title: { tag: "plain_text", content: "JSmart" },
-				template: "blue",
+				template: template,
 			},
 			body: {
 				elements: [{ tag: "markdown", content: text }],
