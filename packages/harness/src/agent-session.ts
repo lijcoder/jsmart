@@ -153,14 +153,31 @@ export class AgentSession {
 	}
 
 	async prompt(text: string): Promise<void> {
+		// slash command execute
+		if (text.startsWith("/")) {
+			if (text === "/abort") {
+				await this.abort();
+				return;
+			}
+		}
+		// steer message
+		if (this.isProcessing()) {
+			this.agent.steer({
+				role: "user",
+				timestamp: Date.now(),
+				content: text,
+			});
+			return;
+		}
 		// Wait for the agent to finish processing any current prompt before sending a new one
 		await this.agent.waitForIdle();
 		await this.agent.prompt(text);
 	}
 
 	/** Abort the current agent run, if one is active. */
-	abort(): void {
+	abort(): Promise<void> {
 		this.agent.abort();
+		return this.agent.waitForIdle();
 	}
 
 	/** Check if the agent is currently processing a prompt. */

@@ -68,8 +68,8 @@ export class CodingSession {
 	}
 
 	/** Abort the current agent run, if one is active. */
-	abort(): void {
-		this.agentSession.abort();
+	abort(): Promise<void> {
+		return this.agentSession.abort();
 	}
 
 	/** Check if the agent is currently processing a prompt. */

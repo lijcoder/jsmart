@@ -110,13 +110,6 @@ export class FeishuChannel implements Channel {
 						// sessionId: threadMode on → "chat_id:thread_id" for threads, "chat_id" otherwise
 						const sessionId = threadMode && isThread ? `${chatId}:${threadId}` : (chatId ?? route.id);
 
-						// Reject message if the session is already running a prompt
-						if (this.activeSources.has(sessionId)) {
-							logger.info("[Feishu] Session %s is busy, dropping message with SLEEP reaction", sessionId);
-							await this._addReaction({ chatId, messageId }, "SLEEP");
-							return;
-						}
-
 						const source: MessageSource = {
 							channelId: this.id,
 							routeId: route.id,

@@ -139,7 +139,7 @@ async function main(): Promise<void> {
 
 	function handleAbort(): void {
 		if (isAgentRunning) {
-			session.abort();
+			session.abort()?.catch(() => {});
 			// Don't print here — wait for agent_end event with stopReason="aborted"
 		}
 	}
