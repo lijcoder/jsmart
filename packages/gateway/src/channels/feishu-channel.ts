@@ -1,9 +1,9 @@
 import type { AgentSessionEvent } from "@jsmart/jsmart-harness";
 import * as Lark from "@larksuiteoapi/node-sdk";
 import { randomUUID } from "crypto";
-import { existsSync, mkdirSync } from "fs";
+import { createReadStream, existsSync, mkdirSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
+import { basename, extname, join } from "path";
 import type { Route } from "../config.js";
 import { logger } from "../logger.js";
 import type { ChannelFactory } from "./registry.js";
@@ -270,6 +270,75 @@ export class FeishuChannel implements Channel {
 		}
 	}
 
+	/** Upload and send a file or image via sendMedia tool */
+	private async _sendMedia(meta: FeishuMeta, filePath: string, type: string): Promise<void> {
+		if (!this.client) return;
+
+		if (!existsSync(filePath)) {
+			logger.error("[Feishu] sendMedia file not found: %s", filePath);
+			await this._sendText(meta, `[Error] File not found: ${filePath}`, false);
+			return;
+		}
+
+		try {
+			if (type === "image") {
+				const res = await this.client.im.v1.image.create({
+					data: {
+						image_type: "message",
+						image: createReadStream(filePath),
+					},
+				});
+				if (!res?.image_key) {
+					await this._sendText(meta, "[Error] Image upload failed: no image_key returned", false);
+					return;
+				}
+				await this._sendContent(meta, "image", JSON.stringify({ image_key: res.image_key }));
+			} else {
+				const fileName = basename(filePath);
+				const res = await this.client.im.v1.file.create({
+					data: {
+						file_type: this._getFileType(extname(filePath)),
+						file_name: fileName,
+						file: createReadStream(filePath),
+					},
+				});
+				if (!res?.file_key) {
+					await this._sendText(meta, "[Error] File upload failed: no file_key returned", false);
+					return;
+				}
+				await this._sendContent(meta, "file", JSON.stringify({ file_key: res.file_key }));
+			}
+		} catch (err) {
+			logger.error("[Feishu] sendMedia failed: %s", err);
+			await this._sendText(meta, `[Error] sendMedia failed: ${this._extractApiError(err)}`, false);
+		}
+	}
+
+	/** Send a content message (image/file) to a chat or thread */
+	private async _sendContent(meta: FeishuMeta, msgType: string, content: string): Promise<void> {
+		if (!this.client) return;
+
+		if (meta.threadId) {
+			await this.client.im.message.reply({
+				path: { message_id: meta.messageId },
+				data: {
+					reply_in_thread: true,
+					content,
+					msg_type: msgType,
+				},
+			});
+		} else {
+			await this.client.im.message.create({
+				params: { receive_id_type: "chat_id" },
+				data: {
+					receive_id: meta.chatId,
+					content,
+					msg_type: msgType,
+				},
+			});
+		}
+	}
+
 	/** Extract a human-readable error message from a Lark SDK / Axios error */
 	private _extractApiError(error: unknown): string {
 		// Lark API errors are AxiosError with response.data containing { code, msg }
@@ -334,6 +403,15 @@ export class FeishuChannel implements Channel {
 		// Send "typing" reaction when the agent starts
 		if (event.type === "agent_start" && meta.messageId) {
 			await this._addReaction(meta, "Typing");
+			return;
+		}
+
+		// Handle sendMedia tool execution: upload and send file/image
+		if (event.type === "tool_execution_end" && event.toolName === "sendMedia" && !event.isError) {
+			const details = event.result?.details as { path?: string; type?: string } | undefined;
+			if (details?.path && details?.type) {
+				await this._sendMedia(meta, details.path, details.type);
+			}
 			return;
 		}
 
@@ -416,6 +494,29 @@ export class FeishuChannel implements Channel {
 				elements: [{ tag: "markdown", content: text }],
 			},
 		};
+	}
+
+	/** Map file extension to Feishu file type for im.v1.file.create */
+	private _getFileType(ext: string): "opus" | "mp4" | "pdf" | "doc" | "xls" | "ppt" | "stream" {
+		switch (ext.toLowerCase()) {
+			case ".opus":
+				return "opus";
+			case ".mp4":
+				return "mp4";
+			case ".pdf":
+				return "pdf";
+			case ".doc":
+			case ".docx":
+				return "doc";
+			case ".xls":
+			case ".xlsx":
+				return "xls";
+			case ".ppt":
+			case ".pptx":
+				return "ppt";
+			default:
+				return "stream";
+		}
 	}
 }
 
