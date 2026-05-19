@@ -10,6 +10,8 @@
 			"@jsmart/jsmart-ai/dist/*": ["./packages/ai/src/*"],
 			"@jsmart/jsmart-agent-core": ["./packages/agent/src/index.ts"],
 			"@jsmart/jsmart-agent-core/*": ["./packages/agent/src/*"],
+			"@jsmart/jsmart-harness": ["./packages/harness/src/index.ts"],
+			"@jsmart/jsmart-harness/*": ["./packages/harness/src/*"],
 			"@jsmart/jsmart-gateway": ["./packages/gateway/src/index.ts"],
 			"@jsmart/jsmart-gateway/*": ["./packages/gateway/src/*"],
 			"@sinclair/typebox": ["./node_modules/@sinclair/typebox"],

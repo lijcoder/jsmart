@@ -1,3 +1,4 @@
+import type { AgentTool } from "@jsmart/jsmart-agent-core";
 import { Agent, type AgentEvent } from "@jsmart/jsmart-agent-core";
 import type { Api, AssistantMessage, Model } from "@jsmart/jsmart-ai";
 import { isContextOverflow } from "@jsmart/jsmart-ai";
@@ -25,6 +26,8 @@ export interface AgentSessionOptions {
 	promptTemplate?: string;
 	/** 自定义内容，替换 {{custom}} 占位符 */
 	customContent?: string | (() => string);
+	/** Additional tools to append to the default tool set */
+	additionalTools?: AgentTool<any>[];
 }
 
 export class AgentSession {
@@ -77,6 +80,9 @@ export class AgentSession {
 		});
 		const executor = createExecutor();
 		const tools = createTools(executor);
+		if (options?.additionalTools) {
+			tools.push(...options.additionalTools);
+		}
 		this.agent.state.tools = tools;
 		const skills = this.resourceLoader.getSkills();
 		const systemPrompt = buildSystemPrompt({

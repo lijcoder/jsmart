@@ -8,6 +8,7 @@ import {
 import { existsSync, mkdirSync } from "fs";
 import type { Settings } from "./config.js";
 import { resolveAgentSessionsDir, resolveAgentWorkspaceDir, resolveSessionFile } from "./config.js";
+import { createGatewayTools } from "./tools/index.js";
 
 /**
  * Create an AgentSession from a route.
@@ -66,6 +67,7 @@ export function createAgentSession(
 		template.model.model,
 		{
 			promptTemplate: promptTemplate ?? undefined,
+			additionalTools: createGatewayTools(),
 		},
 	);
 }
