@@ -1,3 +1,4 @@
+import type { AssistantMessage } from "@jsmart/jsmart-ai";
 import type { AgentSessionEvent } from "@jsmart/jsmart-harness";
 import * as Lark from "@larksuiteoapi/node-sdk";
 import { randomUUID } from "crypto";
@@ -237,10 +238,11 @@ export class FeishuChannel implements Channel {
 		this.activeSources.clear();
 	}
 
-	private async _sendText(meta: FeishuMeta, content: string, status?: boolean): Promise<void> {
+	private async _sendText(meta: FeishuMeta, content: string, status?: boolean, usage?: string): Promise<void> {
 		if (!content.trim() || !this.client) return;
 
-		const cardMessage = status === false ? this._buildCardMessageError(content) : this._buildCardMessage(content);
+		const cardMessage =
+			status === false ? this._buildCardMessageError(content, usage) : this._buildCardMessage(content, usage);
 		const msgContent = JSON.stringify(cardMessage);
 
 		try {
@@ -418,22 +420,25 @@ export class FeishuChannel implements Channel {
 		// Send "failed" reaction + error text if the last assistant message has an error.
 		// Otherwise send "done" reaction. Always release the session.
 		if (event.type === "agent_end") {
+			// Calculate total token usage from all assistant messages in this run
+			const usage = this._buildUsageText(event.messages);
+
 			// Check the last message for error info. We have to wait until the end of the agent run to know if there were any errors,
 			const lastMsg = event.messages[event.messages.length - 1];
 			if (lastMsg && lastMsg.role === "assistant") {
 				if (lastMsg.stopReason === "length" || lastMsg.stopReason === "error" || lastMsg.stopReason === "aborted") {
 					const errMsg = `[Error](${lastMsg.stopReason}) ${lastMsg.errorMessage ?? ""}`;
-					await this._sendText(meta, errMsg, false);
+					await this._sendText(meta, errMsg, false, usage);
 				} else if (lastMsg.stopReason === "stop") {
 					const finalMsg = this._extractText(lastMsg.content);
 					if (finalMsg) {
-						await this._sendText(meta, finalMsg, true);
+						await this._sendText(meta, finalMsg, true, usage);
 					} else {
-						await this._sendText(meta, `[No text content to display]`, false);
+						await this._sendText(meta, `[No text content to display]`, false, usage);
 					}
 				}
 			} else {
-				await this._sendText(meta, `[last message role isn't assistant, it's ${lastMsg.role}]`, false);
+				await this._sendText(meta, `[last message role isn't assistant, it's ${lastMsg.role}]`, false, usage);
 			}
 			// send done reaction
 			if (meta.messageId) {
@@ -451,6 +456,40 @@ export class FeishuChannel implements Channel {
 			.filter((p) => p.type === "text")
 			.map((p) => p.text ?? "")
 			.join("");
+	}
+
+	/** Sum token usage from all assistant messages in an agent run */
+	private _buildUsageText(messages: { role: string }[]): string {
+		let totalInput = 0;
+		let totalOutput = 0;
+		let totalCacheRead = 0;
+		let totalCacheWrite = 0;
+		let totalTokens = 0;
+		let totalCost = 0;
+
+		for (const msg of messages) {
+			if (msg.role === "assistant") {
+				const usage = (msg as AssistantMessage).usage;
+				if (usage) {
+					totalInput += usage.input;
+					totalOutput += usage.output;
+					totalCacheRead += usage.cacheRead;
+					totalCacheWrite += usage.cacheWrite;
+					totalTokens += usage.totalTokens;
+					totalCost += usage.cost.total;
+				}
+			}
+		}
+
+		const parts: string[] = [];
+		parts.push(`Input: ${totalInput}`);
+		parts.push(`Output: ${totalOutput}`);
+		parts.push(`CacheRead: ${totalCacheRead}`);
+		parts.push(`CacheWrite: ${totalCacheWrite}`);
+		parts.push(`Total: ${totalTokens}`);
+		parts.push(`Cost: $${totalCost.toFixed(6)}`);
+
+		return parts.join(" | ");
 	}
 
 	/** Find the first route matching the given chatId */
@@ -474,22 +513,26 @@ export class FeishuChannel implements Channel {
 		this._writeIndex = (this._writeIndex + 1) % 10;
 	}
 
-	private _buildCardMessageError(text: string): unknown {
-		return this._doBuildCardMessage(text, "red");
+	private _buildCardMessageError(text: string, usage?: string): unknown {
+		return this._doBuildCardMessage(text, "red", usage);
 	}
 
-	private _buildCardMessage(text: string): unknown {
-		return this._doBuildCardMessage(text, "blue");
+	private _buildCardMessage(text: string, usage?: string): unknown {
+		return this._doBuildCardMessage(text, "blue", usage);
 	}
 
-	private _doBuildCardMessage(text: string, template: string): unknown {
+	private _doBuildCardMessage(text: string, template: string, subtitle?: string): unknown {
+		const header: Record<string, unknown> = {
+			title: { tag: "plain_text", content: "JSmart" },
+			template: template,
+		};
+		if (subtitle) {
+			header.subtitle = { tag: "plain_text", content: subtitle };
+		}
 		return {
 			schema: "2.0",
 			config: { width_mode: "fill" },
-			header: {
-				title: { tag: "plain_text", content: "JSmart" },
-				template: template,
-			},
+			header,
 			body: {
 				elements: [{ tag: "markdown", content: text }],
 			},
