@@ -2,18 +2,10 @@
 
 // Agent Factory
 export { createAgentSession } from "./agent-factory.js";
-export type {
-	Channel,
-	ChannelFactory,
-	FeishuChannelOptions,
-	MessageSource,
-	OnMessage,
-} from "./channels/index.js";
+export type { Channel, ChannelFactory, MessageSource, OnMessage } from "./channels/index.js";
 // Channels
 export {
 	ChannelRegistry,
-	FeishuChannel,
-	FeishuChannelFactory,
 	getGlobalRegistry,
 	registerChannelFactory,
 	resetGlobalRegistry,

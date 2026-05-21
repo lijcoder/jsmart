@@ -1,6 +1,7 @@
 import type { AgentSession, AgentSessionEvent } from "@jsmart/jsmart-harness";
 import { ModelManager } from "@jsmart/jsmart-harness";
 import { existsSync, mkdirSync, renameSync } from "fs";
+import { resolve } from "path";
 import { createAgentSession } from "./agent-factory.js";
 import { getGlobalRegistry } from "./channels/registry.js";
 import type { Channel, MessageContent, MessageSource } from "./channels/types.js";
@@ -30,25 +31,48 @@ export class Gateway {
 	}
 
 	/**
-	 * Dynamically import each channel module by type, then create instances from config.
-	 * Convention: channel modules are named `{type}-channel.js` under channels/.
+	 * Load channel implementations by scanning extension directories.
+	 *
+	 * Each channel `type` is loaded from `{dir}/{type}/channel.js`.
+	 * The built-in `channels/` directory is always searched first (as default),
+	 * followed by any additional directories in `settings.channelDirs`.
+	 *
 	 * Importing the module triggers its self-registration via registerChannelFactory().
 	 */
 	async registerChannelsFromConfig(settings: Settings): Promise<void> {
-		const channelsDir = new URL("channels/", import.meta.url).pathname;
+		// Built-in channels directory is always the first search path
+		const builtinDir = new URL("channels/", import.meta.url).pathname;
+		const extraDirs = (settings.channelDirs ?? []).map((d) => resolve(this.rootDir, d));
+		const searchDirs = [builtinDir, ...extraDirs];
 
 		for (const [channelId, chConfig] of Object.entries(settings.channels)) {
 			const type = chConfig.type;
+			let loaded = false;
 
-			// Dynamic import triggers the module's self-registration
-			try {
-				await import(`${channelsDir}${type}-channel.js`);
-			} catch {
+			for (const dir of searchDirs) {
+				// Try .js first (production), then .ts (development / tsx)
+				for (const ext of [".js", ".ts"]) {
+					const entry = resolve(dir, type, `channel${ext}`);
+					if (!existsSync(entry)) continue;
+					try {
+						await import(entry);
+						loaded = true;
+						logger.info('[Gateway] Channel "%s" loaded from: %s', channelId, entry);
+						break;
+					} catch (err) {
+						const msg = err instanceof Error ? err.message : String(err);
+						logger.error('[Gateway] Channel "%s" failed to load from "%s": %s', channelId, entry, msg);
+					}
+				}
+				if (loaded) break;
+			}
+
+			if (!loaded) {
 				logger.error(
-					'[Gateway] Channel "%s" skipped: type "%s" has no implementation. Expected "%s-channel.js" in channels/ directory.',
+					'[Gateway] Channel "%s" skipped: type "%s" not found in any search dir [%s]',
 					channelId,
 					type,
-					type,
+					searchDirs.join(", "),
 				);
 				continue;
 			}

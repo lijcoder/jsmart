@@ -63,6 +63,7 @@ const ChannelConfigSchema = Type.Object({
 const SettingsSchema = Type.Object({
 	agentTemplates: Type.Record(Type.String(), AgentTemplateSchema),
 	channels: Type.Record(Type.String(), ChannelConfigSchema),
+	channelDirs: Type.Optional(Type.Array(Type.String())),
 });
 
 ajv.addSchema(SettingsSchema, "Settings");
@@ -89,6 +90,15 @@ export type ChannelConfig = Static<typeof ChannelConfigSchema> & Record<string, 
 export interface Settings {
 	agentTemplates: Record<string, AgentTemplate>;
 	channels: Record<string, ChannelConfig>;
+	/**
+	 * Additional directories to scan for channel extensions.
+	 * Each subdirectory under a channelDir whose name matches a channel `type`
+	 * must contain a `channel.js` entry point.
+	 *
+	 * Default: the built-in `channels/` directory inside the gateway package.
+	 * Paths can be absolute or relative to the config file's parent directory.
+	 */
+	channelDirs?: string[];
 }
 
 // ── Directory Resolution ────────────────────────────────────────────

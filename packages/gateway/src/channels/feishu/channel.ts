@@ -5,11 +5,11 @@ import { randomUUID } from "crypto";
 import { createReadStream, existsSync, mkdirSync } from "fs";
 import { tmpdir } from "os";
 import { basename, extname, join } from "path";
-import type { Route } from "../config.js";
-import { logger } from "../logger.js";
-import type { ChannelFactory } from "./registry.js";
-import { registerChannelFactory } from "./registry.js";
-import type { Channel, MessageContent, MessageSource, OnMessage } from "./types.js";
+import type { Route } from "../../config.js";
+import { logger } from "../../logger.js";
+import type { ChannelFactory } from "../registry.js";
+import { registerChannelFactory } from "../registry.js";
+import type { Channel, MessageContent, MessageSource, OnMessage } from "../types.js";
 
 export interface FeishuChannelOptions {
 	appId: string;

@@ -1,4 +1,3 @@
-export { FeishuChannel, FeishuChannelFactory, type FeishuChannelOptions } from "./feishu-channel.js";
 export {
 	type ChannelFactory,
 	ChannelRegistry,
