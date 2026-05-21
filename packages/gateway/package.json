@@ -1,6 +1,6 @@
 {
 	"name": "@jsmart/jsmart-gateway",
-	"version": "0.65.2",
+	"version": "0.0.1",
 	"description": "Gateway module for channel and routing management",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -36,7 +36,7 @@
 		"node": ">=20.0.0"
 	},
 	"dependencies": {
-		"@jsmart/jsmart-harness": "^0.65.2",
+		"@jsmart/jsmart-harness": "^0.0.1",
 		"@sinclair/typebox": "^0.34.30",
 		"ajv": "^8.17.1",
 		"@larksuiteoapi/node-sdk": "^1.62.1",
