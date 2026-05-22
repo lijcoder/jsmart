@@ -15,7 +15,7 @@
  */
 
 import { CodingSession } from "./coding-session.js";
-import { initGlobalConfig, loadConfig } from "./config.js";
+import { initGlobalConfig, listSessionFiles, loadConfig } from "./config.js";
 import { colorize, handleAgentEvent } from "./event-output.js";
 
 // ── ANSI helpers ────────────────────────────────────────────────────
@@ -47,8 +47,15 @@ async function main(): Promise<void> {
 		process.exit(0);
 	}
 
+	// Parse --session <id> flag
+	const sessionIdx = process.argv.indexOf("--session");
+	let sessionId: string | undefined;
+	if (sessionIdx !== -1 && sessionIdx + 1 < process.argv.length) {
+		sessionId = process.argv[sessionIdx + 1];
+	}
+
 	// Load configuration
-	const { config, error } = loadConfig();
+	const { config, error } = loadConfig(process.cwd(), sessionId);
 	if (error || !config) {
 		show(`Error loading config: ${error}`);
 		process.exit(1);
@@ -77,9 +84,11 @@ async function main(): Promise<void> {
 	show("  /compact            - Compact context");
 	show("  /tokens             - Show token count");
 	show("  /session            - Show session file path");
+	show("  /sessions           - List all saved sessions");
 	show("  /multiline          - Enter multiline input mode (type /end to submit)");
 	show("  /quit               - Exit");
 	show("");
+	show(`${ESC}[90mTip: Use --session <filename> to resume a previous session.${ESC}[0m`);
 	show(`${ESC}[90mPress ESC to abort a running agent, Ctrl+C to exit.${ESC}[0m`);
 	show(`${ESC}[90mPress Ctrl+J to insert a newline in your input.${ESC}[0m`);
 	show("");
@@ -250,6 +259,26 @@ async function main(): Promise<void> {
 
 		if (command === "/session") {
 			show(`Session file: ${session.getSessionFilePath()}`);
+			resetPrompt();
+			return;
+		}
+
+		if (command === "/sessions") {
+			// config is guaranteed non-null here (early exit above)
+			const sessionFiles = listSessionFiles(config!.sessionsDir);
+			if (sessionFiles.length === 0) {
+				show("No saved sessions found.");
+			} else {
+				show(`Sessions in ${config!.sessionsDir}:`);
+				for (const f of sessionFiles) {
+					const marker = session.getSessionFilePath()?.endsWith(f.name) ? " *" : "  ";
+					const time = f.mtime.toLocaleString();
+					show(`${marker} ${f.name}  ${time}`);
+				}
+				show("");
+				show("Use --session <filename> to resume a session.");
+				show("(*) marks the current session.");
+			}
 			resetPrompt();
 			return;
 		}
