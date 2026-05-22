@@ -20,8 +20,8 @@ export class CodingSession {
 	private agentSession: AgentSession;
 
 	constructor(projectDir: string, config: ResolvedConfig) {
-		// Generate session file path
-		const sessionFile = generateSessionFilePath(config.sessionsDir, projectDir);
+		// Generate session file path (use sessionId to resume if provided)
+		const sessionFile = generateSessionFilePath(config.sessionsDir, projectDir, config.sessionId);
 
 		// Initialize components (same pattern as agent-session.test.ts)
 		const modelManager = new ModelManager(config.modelFile);

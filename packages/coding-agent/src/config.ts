@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, join, resolve } from "path";
 import { ajv, type CodingSettings } from "./config-schema.js";
@@ -21,6 +21,8 @@ export interface ResolvedConfig {
 	settings: CodingSettings;
 	modelFile: string;
 	skillPaths: string[];
+	/** Session ID used to resume a previous session (optional) */
+	sessionId?: string;
 }
 
 export interface ConfigLoadResult {
@@ -176,15 +178,68 @@ function resolveModelFile(projectDirPath: string, globalDir: string): string {
 	return join(globalDir, MODELS_FILE);
 }
 
-/** Generate session file path: <sessionsDir>/<project-pwd-hash>-<uuid>.jsonl */
-export function generateSessionFilePath(sessionsDir: string, projectDir: string): string {
+export interface SessionFileInfo {
+	name: string;
+	mtime: Date;
+}
+
+/**
+ * List available session files in the sessions directory.
+ * Returns an array of filenames with modification times, sorted by mtime descending.
+ */
+export function listSessionFiles(sessionsDir: string): SessionFileInfo[] {
+	if (!existsSync(sessionsDir)) {
+		return [];
+	}
+	try {
+		return readdirSync(sessionsDir)
+			.filter((f) => f.endsWith(".jsonl"))
+			.map((f) => ({
+				name: f,
+				mtime: statSync(join(sessionsDir, f)).mtime,
+			}))
+			.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * Generate session file path: <sessionsDir>/<project-pwd-hash>-<uuid>.jsonl
+ *
+ * If `sessionId` is provided, looks for an existing file matching that ID
+ * (either the full filename or a partial match on the UUID portion).
+ */
+export function generateSessionFilePath(sessionsDir: string, projectDir: string, sessionId?: string): string {
 	// Create sessions directory if it doesn't exist
 	if (!existsSync(sessionsDir)) {
 		mkdirSync(sessionsDir, { recursive: true });
 	}
 
-	// Generate project hash (simple hash of project dir path)
 	const projectHash = simpleHash(projectDir);
+
+	if (sessionId) {
+		// Try to find an existing session file matching the sessionId
+		const sessionFiles = listSessionFiles(sessionsDir);
+
+		// Match: exact filename match, or filename matches <projectHash>-<sessionId>.jsonl
+		for (const f of sessionFiles) {
+			if (f.name === sessionId) {
+				return join(sessionsDir, f.name);
+			}
+			// Match by UUID portion: <projectHash>-<uuid>.jsonl
+			const expected = `${projectHash}-${sessionId}.jsonl`;
+			if (f.name === expected) {
+				return join(sessionsDir, f.name);
+			}
+		}
+
+		// No matching session found - create a new session with the given ID
+		const fileName = `${projectHash}-${sessionId}.jsonl`;
+		return join(sessionsDir, fileName);
+	}
+
+	// No sessionId, generate new random UUID
 	const uuid = crypto.randomUUID();
 	const fileName = `${projectHash}-${uuid}.jsonl`;
 	return join(sessionsDir, fileName);
@@ -202,7 +257,7 @@ function simpleHash(str: string): string {
 
 // ── Main Config Loader ─────────────────────────────────────────────
 
-export function loadConfig(cwd: string = process.cwd()): ConfigLoadResult {
+export function loadConfig(cwd: string = process.cwd(), sessionId?: string): ConfigLoadResult {
 	const projectDir = detectProjectDir(cwd);
 	const globalDir = getGlobalDir();
 	const projectDirPath = getProjectDirPath(projectDir);
@@ -230,6 +285,7 @@ export function loadConfig(cwd: string = process.cwd()): ConfigLoadResult {
 		settings: mergedSettings,
 		modelFile,
 		skillPaths,
+		sessionId,
 	};
 
 	return { config, error: undefined };
