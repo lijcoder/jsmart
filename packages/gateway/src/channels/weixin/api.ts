@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { logger } from "../../logger.js";
 import type { BaseInfo, GetConfigResp, GetUpdatesResp } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -42,6 +43,16 @@ async function apiPost(
 	token?: string,
 	timeoutMs?: number,
 ): Promise<string> {
+	return retryFetch(() => _apiPost(apiBase, endpoint, body, token, timeoutMs), endpoint);
+}
+
+async function _apiPost(
+	apiBase: string,
+	endpoint: string,
+	body: Record<string, unknown>,
+	token?: string,
+	timeoutMs?: number,
+): Promise<string> {
 	const ctrl = timeoutMs != null ? new AbortController() : undefined;
 	const t = ctrl != null ? setTimeout(() => ctrl.abort(), timeoutMs) : undefined;
 	try {
@@ -59,6 +70,38 @@ async function apiPost(
 		if (t !== undefined) clearTimeout(t);
 		throw err;
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Retry
+// ---------------------------------------------------------------------------
+
+const RETRY_MAX = 2;
+const RETRY_BASE_MS = 1000;
+
+async function retryFetch(fn: () => Promise<string>, label: string): Promise<string> {
+	let lastErr: unknown;
+	for (let i = 0; i <= RETRY_MAX; i++) {
+		try {
+			return await fn();
+		} catch (err) {
+			lastErr = err;
+			if (i < RETRY_MAX && isTransient(err)) {
+				const delay = RETRY_BASE_MS * 2 ** i;
+				logger.warn("[weixin:api] %s transient failure, retrying in %dms: %s", label, delay, err);
+				await new Promise((r) => setTimeout(r, delay));
+			} else {
+				throw err;
+			}
+		}
+	}
+	throw lastErr;
+}
+
+function isTransient(err: unknown): boolean {
+	if (err instanceof TypeError && err.message === "fetch failed") return true;
+	const code = (err as { cause?: { code?: string } }).cause?.code;
+	return code === "ECONNRESET" || code === "ECONNREFUSED" || code === "ETIMEDOUT" || code === "ENOTFOUND";
 }
 
 // ---------------------------------------------------------------------------
