@@ -7,6 +7,7 @@ import type { AgentSessionEvent } from "@jsmart/jsmart-harness";
 import { WeixinAccountSession } from "../src/channels/weixin/account-session.js";
 import { getUpdates } from "../src/channels/weixin/api/api.js";
 import { MessageItemType } from "../src/channels/weixin/api/types.js";
+import { fetchQRCode, pollQRStatus } from "../src/channels/weixin/auth/login-qr.js";
 import { uploadFileToWeixin } from "../src/channels/weixin/cdn/upload.js";
 import { downloadMediaFromItem } from "../src/channels/weixin/media/media-download.js";
 import { sendMessageWeixin } from "../src/channels/weixin/messaging/send.js";
@@ -123,12 +124,17 @@ test("sendWeixinMediaFile", async () => {
 });
 
 test("weixinAccountSessionGetMessage", { timeout: 60000 }, async () => {
-	const session = new WeixinAccountSession({
-		baseurl: account.baseUrl,
-		bot_token: account.token,
-		ilink_bot_id: account.ilink_bot_id,
-		ilink_user_id: account.ilink_user_id,
-	});
+	const session = new WeixinAccountSession(
+		{
+			baseurl: account.baseUrl,
+			bot_token: account.token,
+			ilink_bot_id: account.ilink_bot_id,
+			ilink_user_id: account.ilink_user_id,
+		},
+		(_account) => {
+			return { success: true };
+		},
+	);
 	session.start(async (source, message) => {
 		console.log("WeixinAccountSession onMessage source:", JSON.stringify(source, null, 2));
 		console.log("WeixinAccountSession onMessage message:", JSON.stringify(message, null, 2));
@@ -136,12 +142,17 @@ test("weixinAccountSessionGetMessage", { timeout: 60000 }, async () => {
 });
 
 test("weixinAccountSessionSendMessage", async () => {
-	const session = new WeixinAccountSession({
-		baseurl: account.baseUrl,
-		bot_token: account.token,
-		ilink_bot_id: account.ilink_bot_id,
-		ilink_user_id: account.ilink_user_id,
-	});
+	const session = new WeixinAccountSession(
+		{
+			baseurl: account.baseUrl,
+			bot_token: account.token,
+			ilink_bot_id: account.ilink_bot_id,
+			ilink_user_id: account.ilink_user_id,
+		},
+		(_account) => {
+			return { success: true };
+		},
+	);
 	const source = {
 		channelId: "weixin",
 		routeId: "weixin-main",
@@ -184,12 +195,17 @@ test("weixinAccountSessionSendMessage", async () => {
 });
 
 test("weixinAccountSessionSendFile", { timeout: 60000 }, async () => {
-	const session = new WeixinAccountSession({
-		baseurl: account.baseUrl,
-		bot_token: account.token,
-		ilink_bot_id: account.ilink_bot_id,
-		ilink_user_id: account.ilink_user_id,
-	});
+	const session = new WeixinAccountSession(
+		{
+			baseurl: account.baseUrl,
+			bot_token: account.token,
+			ilink_bot_id: account.ilink_bot_id,
+			ilink_user_id: account.ilink_user_id,
+		},
+		(_account) => {
+			return { success: true };
+		},
+	);
 	const source = {
 		channelId: "weixin",
 		routeId: "weixin-main",
@@ -221,4 +237,14 @@ test("weixinAccountSessionSendFile", { timeout: 60000 }, async () => {
 	};
 	await session.handleSendEvent(source, image);
 	await session.handleSendEvent(source, docx);
+});
+
+test("getQrCode", async () => {
+	const qrcode = await fetchQRCode();
+	console.log("fetchQRCode result:", JSON.stringify(qrcode, null, 2));
+});
+
+test("pollQrCodeStatus", { timeout: 60000 }, async () => {
+	const status = await pollQRStatus("cae9bc340a53a2b2352053a680202b50");
+	console.log("pollQRStatus result:", JSON.stringify(status, null, 2));
 });

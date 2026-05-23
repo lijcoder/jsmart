@@ -1,5 +1,9 @@
 import type { AgentSessionEvent } from "@jsmart/jsmart-harness";
 
+export interface ChannelGeneralConfig {
+	readonly rootDir: string;
+}
+
 /** Identifies the source of a message — populated by the Channel */
 export interface MessageSource {
 	/** Channel that received the message */

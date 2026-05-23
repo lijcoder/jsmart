@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, renameSync } from "fs";
 import { resolve } from "path";
 import { createAgentSession } from "./agent-factory.js";
 import { getGlobalRegistry } from "./channels/registry.js";
-import type { Channel, MessageContent, MessageSource } from "./channels/types.js";
+import type { Channel, ChannelGeneralConfig, MessageContent, MessageSource } from "./channels/types.js";
 import type { Settings } from "./config.js";
 import { logger } from "./logger.js";
 
@@ -76,8 +76,10 @@ export class Gateway {
 				);
 				continue;
 			}
-
-			const channel = getGlobalRegistry().create(type, chConfig);
+			const generalConfig: ChannelGeneralConfig = {
+				rootDir: this.rootDir,
+			};
+			const channel = getGlobalRegistry().create(type, chConfig, generalConfig);
 			this.registerChannel(channel);
 		}
 	}

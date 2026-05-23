@@ -7,6 +7,7 @@ import { logger } from "../..//logger.js";
 import type { MessageSource, OnMessage } from "../types.js";
 import { getConfig, getUpdates, sendTyping } from "./api/api.js";
 import { MessageItemType, type WeixinMessage } from "./api/types.js";
+import { fetchQRCode, pollQRStatus, type QRCodeResponse, type QRCodeStatusResponse } from "./auth/login-qr.js";
 import { downloadMediaFromItem } from "./media/media-download.js";
 import { sendMessageWeixin } from "./messaging/send.js";
 import { sendWeixinMediaFile } from "./messaging/send-media.js";
@@ -31,10 +32,13 @@ export class WeixinAccountSession {
 	private account: WeixinAccount;
 	private typingInfo: { typing_ticket: string | undefined; update_time: number };
 	private lastContextToken?: string;
+	// 声明一个函数方法，登陆账户
+	private loginFn: (account: WeixinAccount) => { success: boolean; error?: string };
 
-	constructor(account: WeixinAccount) {
+	constructor(account: WeixinAccount, loginFn: (account: WeixinAccount) => { success: boolean; error?: string }) {
 		this.account = account;
 		this.typingInfo = { typing_ticket: undefined, update_time: 0 };
+		this.loginFn = loginFn;
 	}
 
 	async start(onMessage: OnMessage, signal: AbortSignal): Promise<void> {
@@ -49,8 +53,8 @@ export class WeixinAccountSession {
 					timeoutMs: 2000,
 				});
 			} catch (err) {
-				logger.error("[weixin] getUpdates error: %s", (err as Error).message);
-				await new Promise((resolve) => setTimeout(resolve, 1000));
+				logger.error("[weixin] getUpdates fetch error: %s", (err as Error).message);
+				await new Promise((resolve) => setTimeout(resolve, 3000));
 				continue;
 			}
 
@@ -60,7 +64,11 @@ export class WeixinAccountSession {
 
 			// check error
 			if (updatesMessage?.errmsg) {
-				logger.error("[weixin] getUpdates error: %s", JSON.stringify(updatesMessage));
+				logger.error(
+					"[weixin] getUpdates error: %s, account: %s",
+					JSON.stringify(updatesMessage),
+					JSON.stringify(this.account),
+				);
 				await new Promise((resolve) => setTimeout(resolve, 1000));
 				continue;
 			}
@@ -101,10 +109,18 @@ export class WeixinAccountSession {
 			// handler text message
 			const msgItems = await this._handlerMessage(updatesMessage.msgs);
 			if (msgItems.length > 0) {
-				onMessage(source, {
-					type: "text",
-					text: msgItems[0],
-				});
+				const text = msgItems[0];
+				if (text.trim() === "/wxlogin") {
+					const qrCode = await this._getQrcode();
+					if (qrCode) {
+						await this._pollQrcodeStatus(qrCode.qrcode);
+					}
+				} else {
+					onMessage(source, {
+						type: "text",
+						text: text,
+					});
+				}
 			}
 		}
 	}
@@ -257,5 +273,54 @@ export class WeixinAccountSession {
 				status: status,
 			},
 		});
+	}
+
+	private async _getQrcode(): Promise<QRCodeResponse | null> {
+		const qrcode = await fetchQRCode();
+		if (qrcode?.qrcode_img_content) {
+			const text = `请扫描二维码登录: [请点击扫码](${qrcode.qrcode_img_content})`;
+			await this._sendText(text, false);
+			return qrcode;
+		} else {
+			const text = `获取二维码失败，请稍后重试`;
+			await this._sendText(text, false);
+			return null;
+		}
+	}
+
+	private async _pollQrcodeStatus(qrcode: string): Promise<void> {
+		// 循环3分钟，每30秒调用一次pollQRStatus，直到状态为confirmed
+		const startTime = Date.now();
+		while (Date.now() - startTime < 3 * 60 * 1000) {
+			const status = await pollQRStatus(qrcode);
+			logger.info(`[weixin] QR code status: ${status.status}`);
+			if (status.status === "confirmed") {
+				const loginResult = await this._handleLogin(status);
+				if (!loginResult.success) {
+					await this._sendText(`登录失败，原因：${loginResult.error}, 重新登陆`, false);
+					return;
+				} else {
+					await this._sendText(`登陆成功，1分钟后可使用。`, false);
+				}
+				return;
+			} else if (status.status === "wait") {
+				await new Promise((resolve) => setTimeout(resolve, 3000));
+			} else {
+				await this._sendText(`二维码登录失败，状态：${status.status}，请重新获取二维码。`, false);
+				return;
+			}
+		}
+	}
+
+	private async _handleLogin(qrResp: QRCodeStatusResponse): Promise<{ success: boolean; error?: string }> {
+		// 写入文件
+		const account: WeixinAccount = {
+			baseurl: qrResp.baseurl!,
+			bot_token: qrResp.bot_token!,
+			ilink_bot_id: qrResp.ilink_bot_id!,
+			ilink_user_id: qrResp.ilink_user_id!,
+		};
+		const result = this.loginFn(account);
+		return result;
 	}
 }

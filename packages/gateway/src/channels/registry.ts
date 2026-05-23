@@ -1,11 +1,11 @@
-import type { Channel } from "./types.js";
+import type { Channel, ChannelGeneralConfig } from "./types.js";
 
 /** Factory for creating a Channel instance from its config object */
 export interface ChannelFactory<C = Record<string, unknown>> {
 	/** Matches config.type — used as the registry key */
 	readonly type: string;
 	/** Create a Channel instance from a validated config object */
-	create(config: C): Channel;
+	create(config: C, generalConfig?: ChannelGeneralConfig): Channel;
 }
 
 /** Registry that maps channel type strings to factories */
@@ -21,13 +21,13 @@ export class ChannelRegistry {
 	}
 
 	/** Create a Channel instance from a config object based on its type field */
-	create(type: string, config: unknown): Channel {
+	create(type: string, config: unknown, generalConfig: ChannelGeneralConfig): Channel {
 		const factory = this.factories.get(type);
 		if (!factory) {
 			const known = [...this.factories.keys()];
 			throw new Error(`Unknown channel type: "${type}". Registered types: [${known.join(", ")}]`);
 		}
-		return factory.create(config as Record<string, unknown>);
+		return factory.create(config as Record<string, unknown>, generalConfig);
 	}
 
 	/** Check if a channel type is registered */

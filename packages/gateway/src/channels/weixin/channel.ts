@@ -1,20 +1,17 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { AgentSessionEvent } from "@jsmart/jsmart-harness";
 import { logger } from "../../logger.js";
 import type { ChannelFactory } from "../registry.js";
 import { registerChannelFactory } from "../registry.js";
-import type { Channel, MessageSource, OnMessage } from "../types.js";
+import type { Channel, ChannelGeneralConfig, MessageSource, OnMessage } from "../types.js";
 import { type WeixinAccount, WeixinAccountSession } from "./account-session.js";
 
 // ---------------------------------------------------------------------------
 // Options
 // ---------------------------------------------------------------------------
 
-export interface WeixinChannelOptions {
-	/** Directory where account token files ({userId}_token.json) are stored */
-	accountsDir: string;
-}
+export interface WeixinChannelOptions {}
 
 // ---------------------------------------------------------------------------
 // WeixinChannel
@@ -23,14 +20,21 @@ export interface WeixinChannelOptions {
 export class WeixinChannel implements Channel {
 	readonly id = "weixin";
 
-	private options: WeixinChannelOptions;
 	private abortController: AbortController;
 	/** accountId → WeixinAccountSession */
 	private sessions = new Map<string, WeixinAccountSession>();
+	private weixinConfigDir: string;
+	private weixinConfigAccountDir: string;
 
-	constructor(options: WeixinChannelOptions) {
-		this.options = options;
+	constructor(_options: WeixinChannelOptions, generalConfig?: ChannelGeneralConfig) {
 		this.abortController = new AbortController();
+		const wxConfigDir = generalConfig?.rootDir ?? "";
+		if (!wxConfigDir) {
+			logger.warn("[weixin] No rootDir in generalConfig, using current working directory");
+			throw new Error("WeixinChannel requires rootDir in generalConfig");
+		}
+		this.weixinConfigDir = resolve(wxConfigDir, "weixin");
+		this.weixinConfigAccountDir = resolve(this.weixinConfigDir, "accounts");
 	}
 
 	// ── Channel lifecycle ────────────────────────────────────────
@@ -72,14 +76,14 @@ export class WeixinChannel implements Channel {
 			if (accounts.length === 0) {
 				logger.warn(
 					"[weixin] No accounts found in %s. Please scan QR code to login first.",
-					this.options.accountsDir,
+					this.weixinConfigAccountDir,
 				);
 				continue;
 			}
 
 			for (const account of accounts) {
 				if (this.sessions.has(account.ilink_user_id)) continue;
-				const session = new WeixinAccountSession(account);
+				const session = new WeixinAccountSession(account, this._loginAccount);
 				this.sessions.set(account.ilink_user_id, session);
 				session.start(onMessage, signal);
 			}
@@ -90,7 +94,7 @@ export class WeixinChannel implements Channel {
 	}
 
 	private _loadAccountFile(): WeixinAccount[] {
-		const dir = this.options.accountsDir;
+		const dir = this.weixinConfigAccountDir;
 		if (!existsSync(dir)) {
 			logger.info("[weixin] Accounts directory does not exist: %s", dir);
 			return [];
@@ -109,8 +113,20 @@ export class WeixinChannel implements Channel {
 				logger.warn("[weixin] Failed to parse account file: %s", name);
 			}
 		}
-
 		return accounts;
+	}
+
+	private _loginAccount(account: WeixinAccount): { success: boolean; error?: string } {
+		// 写入文件
+		const filePath = resolve(this.weixinConfigAccountDir, `${account.ilink_user_id}_token.json`);
+		try {
+			const content = JSON.stringify(account, null, 2);
+			writeFileSync(filePath, content, "utf-8");
+			return { success: true };
+		} catch (error) {
+			logger.error("[weixin] Failed to save account token to %s: %o", filePath, error);
+			return { success: false, error: "Failed to save account token" };
+		}
 	}
 }
 
@@ -120,7 +136,7 @@ export class WeixinChannel implements Channel {
 
 export const WeixinChannelFactory: ChannelFactory<WeixinChannelOptions> = {
 	type: "weixin",
-	create: (config) => new WeixinChannel(config),
+	create: (config, generalConfig) => new WeixinChannel(config, generalConfig),
 };
 
 registerChannelFactory(WeixinChannelFactory);
