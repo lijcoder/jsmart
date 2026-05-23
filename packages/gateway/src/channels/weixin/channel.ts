@@ -18,13 +18,13 @@ export interface WeixinChannelOptions {}
 // ---------------------------------------------------------------------------
 
 export class WeixinChannel implements Channel {
-	readonly id = "weixin";
+	private static weixinConfigDir: string;
+	private static weixinConfigAccountDir: string;
 
+	readonly id = "weixin";
 	private abortController: AbortController;
 	/** accountId → WeixinAccountSession */
 	private sessions = new Map<string, WeixinAccountSession>();
-	private weixinConfigDir: string;
-	private weixinConfigAccountDir: string;
 
 	constructor(_options: WeixinChannelOptions, generalConfig?: ChannelGeneralConfig) {
 		this.abortController = new AbortController();
@@ -33,8 +33,10 @@ export class WeixinChannel implements Channel {
 			logger.warn("[weixin] No rootDir in generalConfig, using current working directory");
 			throw new Error("WeixinChannel requires rootDir in generalConfig");
 		}
-		this.weixinConfigDir = resolve(wxConfigDir, "weixin");
-		this.weixinConfigAccountDir = resolve(this.weixinConfigDir, "accounts");
+		WeixinChannel.weixinConfigDir = resolve(wxConfigDir, "weixin");
+		WeixinChannel.weixinConfigAccountDir = resolve(WeixinChannel.weixinConfigDir, "accounts");
+		logger.info("[weixin] Channel config dir: %s", WeixinChannel.weixinConfigDir);
+		logger.info("[weixin] Channel accounts config dir: %s", WeixinChannel.weixinConfigAccountDir);
 	}
 
 	// ── Channel lifecycle ────────────────────────────────────────
@@ -76,25 +78,36 @@ export class WeixinChannel implements Channel {
 			if (accounts.length === 0) {
 				logger.warn(
 					"[weixin] No accounts found in %s. Please scan QR code to login first.",
-					this.weixinConfigAccountDir,
+					WeixinChannel.weixinConfigAccountDir,
 				);
 				continue;
 			}
 
 			for (const account of accounts) {
-				if (this.sessions.has(account.ilink_user_id)) continue;
-				const session = new WeixinAccountSession(account, this._loginAccount);
-				this.sessions.set(account.ilink_user_id, session);
-				session.start(onMessage, signal);
+				if (this.sessions.has(account.ilink_user_id)) {
+					const session = this.sessions.get(account.ilink_user_id)!;
+					if (!this._checkAccount(session.getAccount(), account)) {
+						session.resetAccount(account);
+						logger.info("[weixin] Account updated for user_id=%s", account.ilink_user_id);
+					}
+				} else {
+					const session = new WeixinAccountSession(account, this._loginAccount);
+					this.sessions.set(account.ilink_user_id, session);
+					session.start(onMessage, signal);
+				}
 			}
 
-			// sleep 10 seconds before next scan
+			// sleep 1 minute before next scan
 			await new Promise((resolve) => setTimeout(resolve, 60000));
 		}
 	}
 
+	private _checkAccount(account: WeixinAccount, newAccount: WeixinAccount): boolean {
+		return account.ilink_bot_id === newAccount.ilink_bot_id;
+	}
+
 	private _loadAccountFile(): WeixinAccount[] {
-		const dir = this.weixinConfigAccountDir;
+		const dir = WeixinChannel.weixinConfigAccountDir;
 		if (!existsSync(dir)) {
 			logger.info("[weixin] Accounts directory does not exist: %s", dir);
 			return [];
@@ -118,7 +131,7 @@ export class WeixinChannel implements Channel {
 
 	private _loginAccount(account: WeixinAccount): { success: boolean; error?: string } {
 		// 写入文件
-		const filePath = resolve(this.weixinConfigAccountDir, `${account.ilink_user_id}_token.json`);
+		const filePath = resolve(WeixinChannel.weixinConfigAccountDir, `${account.ilink_user_id}_token.json`);
 		try {
 			const content = JSON.stringify(account, null, 2);
 			writeFileSync(filePath, content, "utf-8");

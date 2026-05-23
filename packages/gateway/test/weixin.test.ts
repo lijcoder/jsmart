@@ -245,6 +245,6 @@ test("getQrCode", async () => {
 });
 
 test("pollQrCodeStatus", { timeout: 60000 }, async () => {
-	const status = await pollQRStatus("cae9bc340a53a2b2352053a680202b50");
+	const status = await pollQRStatus("7749a00a59deb1b0c164fea53ffd8721");
 	console.log("pollQRStatus result:", JSON.stringify(status, null, 2));
 });

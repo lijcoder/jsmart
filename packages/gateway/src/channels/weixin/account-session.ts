@@ -41,6 +41,16 @@ export class WeixinAccountSession {
 		this.loginFn = loginFn;
 	}
 
+	getAccount(): WeixinAccount {
+		return this.account;
+	}
+
+	resetAccount(account: WeixinAccount) {
+		this.account = account;
+		this.typingInfo = { typing_ticket: undefined, update_time: 0 };
+		this.lastContextToken = undefined;
+	}
+
 	async start(onMessage: OnMessage, signal: AbortSignal): Promise<void> {
 		while (!signal.aborted) {
 			// get messages
