@@ -5,8 +5,7 @@ import { logger } from "../../logger.js";
 import type { ChannelFactory } from "../registry.js";
 import { registerChannelFactory } from "../registry.js";
 import type { Channel, MessageSource, OnMessage } from "../types.js";
-import { WeixinAccountSession } from "./poll.js";
-import type { WeixinAccount } from "./types.js";
+import { type WeixinAccount, WeixinAccountSession } from "./account-session.js";
 
 // ---------------------------------------------------------------------------
 // Options
@@ -25,38 +24,26 @@ export class WeixinChannel implements Channel {
 	readonly id = "weixin";
 
 	private options: WeixinChannelOptions;
-	private abortController?: AbortController;
+	private abortController: AbortController;
 	/** accountId → WeixinAccountSession */
 	private sessions = new Map<string, WeixinAccountSession>();
 
 	constructor(options: WeixinChannelOptions) {
 		this.options = options;
+		this.abortController = new AbortController();
 	}
 
 	// ── Channel lifecycle ────────────────────────────────────────
 
 	async start(onMessage: OnMessage): Promise<void> {
-		this.abortController = new AbortController();
+		logger.info("[weixin] Channel started");
 		const signal = this.abortController.signal;
-
-		const accounts = this._loadAccounts();
-		if (accounts.length === 0) {
-			logger.warn("[weixin] No accounts found in %s. Please scan QR code to login first.", this.options.accountsDir);
-			return;
-		}
-
-		logger.info("[weixin] Starting %d account(s) from %s", accounts.length, this.options.accountsDir);
-
-		for (const account of accounts) {
-			const session = new WeixinAccountSession(account);
-			this.sessions.set(account.ilink_user_id, session);
-			session.start(this.id, onMessage, signal);
-		}
+		this._loadAccounts(signal, onMessage);
 	}
 
 	async stop(): Promise<void> {
-		this.abortController?.abort();
-		this.abortController = undefined;
+		this.abortController.abort();
+		this.abortController = new AbortController();
 		this.sessions.clear();
 		logger.info("[weixin] Channel stopped");
 	}
@@ -79,7 +66,30 @@ export class WeixinChannel implements Channel {
 
 	// ── Account loading ──────────────────────────────────────────
 
-	private _loadAccounts(): WeixinAccount[] {
+	private async _loadAccounts(signal: AbortSignal, onMessage: OnMessage): Promise<void> {
+		while (!signal.aborted) {
+			const accounts = this._loadAccountFile();
+			if (accounts.length === 0) {
+				logger.warn(
+					"[weixin] No accounts found in %s. Please scan QR code to login first.",
+					this.options.accountsDir,
+				);
+				continue;
+			}
+
+			for (const account of accounts) {
+				if (this.sessions.has(account.ilink_user_id)) continue;
+				const session = new WeixinAccountSession(account);
+				this.sessions.set(account.ilink_user_id, session);
+				session.start(onMessage, signal);
+			}
+
+			// sleep 10 seconds before next scan
+			await new Promise((resolve) => setTimeout(resolve, 60000));
+		}
+	}
+
+	private _loadAccountFile(): WeixinAccount[] {
 		const dir = this.options.accountsDir;
 		if (!existsSync(dir)) {
 			logger.info("[weixin] Accounts directory does not exist: %s", dir);

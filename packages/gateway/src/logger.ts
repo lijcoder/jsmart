@@ -35,7 +35,7 @@ export function setLoggerImpl(impl: Logger): void {
 }
 
 export const logger: Logger = {
-	debug: (message, ...args) => _impl.debug(message, ...args),
+	debug: (_message, ..._args) => {},
 	info: (message, ...args) => _impl.info(message, ...args),
 	warn: (message, ...args) => _impl.warn(message, ...args),
 	error: (message, ...args) => _impl.error(message, ...args),
