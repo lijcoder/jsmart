@@ -72,6 +72,11 @@ export class WeixinAccountSession {
 				continue;
 			}
 
+			// ignore error code
+			if (updatesMessage.errcode && updatesMessage.errcode === -14) {
+				continue;
+			}
+
 			// check error
 			if (updatesMessage?.errmsg) {
 				logger.error(
