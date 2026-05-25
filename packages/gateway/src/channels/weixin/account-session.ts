@@ -214,6 +214,12 @@ export class WeixinAccountSession {
 			}
 			return;
 		}
+
+		// handle slash command
+		if (event.type === "slash_command") {
+			await this._sendText(event.message, false);
+			return;
+		}
 	}
 
 	private _extractText(content?: { type: string; text?: string }[]): string {

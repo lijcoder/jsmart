@@ -41,7 +41,7 @@ export interface Channel {
 	 * The channel decides which events to forward to the user (e.g. thinking, tool calls, final text).
 	 * Default: no-op for backward compatibility.
 	 */
-	sendEvent?(source: MessageSource, event: AgentSessionEvent, signal: AbortSignal): Promise<void>;
+	sendEvent?(source: MessageSource, event: AgentSessionEvent, signal?: AbortSignal): Promise<void>;
 
 	/** Stop the channel: disconnect, cleanup resources */
 	stop(): Promise<void>;

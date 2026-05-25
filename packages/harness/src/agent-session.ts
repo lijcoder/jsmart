@@ -16,10 +16,10 @@ export interface ResultState<T> {
 	result?: T;
 }
 /** Session-specific events that extend the core AgentEvent */
-export type AgentSessionEvent = AgentEvent;
+export type AgentSessionEvent = AgentEvent | { type: "slash_command"; name: string; message: string };
 
 /** Listener function for agent session events */
-export type AgentSessionEventListener = (event: AgentSessionEvent, signal: AbortSignal) => void;
+export type AgentSessionEventListener = (event: AgentSessionEvent, signal?: AbortSignal) => void;
 
 export interface AgentSessionOptions {
 	/** 自定义提示词模板 */
@@ -140,7 +140,7 @@ export class AgentSession {
 	}
 
 	/** Emit an event to all listeners */
-	private _emit(event: AgentSessionEvent, signal: AbortSignal): void {
+	private _emit(event: AgentSessionEvent, signal?: AbortSignal): void {
 		for (const l of this._eventListeners) {
 			l(event, signal);
 		}
@@ -161,8 +161,7 @@ export class AgentSession {
 	async prompt(text: string): Promise<void> {
 		// slash command execute
 		if (text.startsWith("/")) {
-			if (text === "/abort") {
-				await this.abort();
+			if (this._slashCommand(text)) {
 				return;
 			}
 		}
@@ -178,6 +177,53 @@ export class AgentSession {
 		// Wait for the agent to finish processing any current prompt before sending a new one
 		await this.agent.waitForIdle();
 		await this.agent.prompt(text);
+	}
+
+	_slashCommand(text: string): boolean {
+		if (text === "/abort") {
+			this.abort().catch(() => {});
+			return true;
+		}
+		if (text === "/model") {
+			this._emit({ type: "slash_command", name: "model", message: this.getModelName() });
+			return true;
+		}
+		if (text === "/models") {
+			const modelNames = this.getAllModelName();
+			const msg = `Available models:\n${modelNames.map((name) => `- ${name}`).join("\n")}`;
+			this._emit({ type: "slash_command", name: "models", message: msg });
+			return true;
+		}
+		if (text.startsWith("/model set")) {
+			const parts = text.replace("/model set", "").trim().split("/");
+			let msg = "";
+			if (parts.length === 2) {
+				const [provider, model] = parts;
+				this.changeModel(provider, model);
+				msg = `Model changed to ${provider}/${model}`;
+			} else {
+				msg = "[ERROR] format error. \nUsage: /model set provider/model";
+			}
+			this._emit({ type: "slash_command", name: "model_set", message: msg });
+			return true;
+		}
+		if (text === "/workspace") {
+			const msg = `Current workspace: ${this.getWorkspace()}`;
+			this._emit({ type: "slash_command", name: "workspace", message: msg });
+			return true;
+		}
+		if (text === "/session") {
+			const sessionFile = this.getSessionFilePath();
+			const msg = sessionFile ? `Session file: ${sessionFile}` : "No session file path available";
+			this._emit({ type: "slash_command", name: "session", message: msg });
+			return true;
+		}
+		if (text === "/tokens") {
+			const msg = `Context tokens: ${this.getContextTokens()}`;
+			this._emit({ type: "slash_command", name: "tokens", message: msg });
+			return true;
+		}
+		return false;
 	}
 
 	/** Abort the current agent run, if one is active. */

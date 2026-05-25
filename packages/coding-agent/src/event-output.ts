@@ -1,4 +1,4 @@
-import type { AgentEvent } from "@jsmart/jsmart-agent-core";
+import type { AgentSessionEvent } from "@jsmart/jsmart-harness";
 
 // ── Theme & Colors ─────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ function formatToolArgs(_toolName: string, args: Record<string, unknown>): strin
 
 // ── Main Event Handler ─────────────────────────────────────────────
 
-export function handleAgentEvent(event: AgentEvent): void {
+export function handleAgentEvent(event: AgentSessionEvent): void {
 	switch (event.type) {
 		case "message_update":
 			if (event.message.role === "assistant") {
@@ -68,7 +68,7 @@ export function handleAgentEvent(event: AgentEvent): void {
 	}
 }
 
-function handleMessageUpdate(event: Extract<AgentEvent, { type: "message_update" }>): void {
+function handleMessageUpdate(event: Extract<AgentSessionEvent, { type: "message_update" }>): void {
 	const assistantEvent = event.assistantMessageEvent;
 
 	switch (assistantEvent.type) {

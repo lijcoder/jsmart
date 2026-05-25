@@ -182,7 +182,7 @@ export class Gateway {
 	private async _handleSessionEvent(
 		source: MessageSource,
 		event: AgentSessionEvent,
-		signal: AbortSignal,
+		signal?: AbortSignal,
 	): Promise<void> {
 		const channel = this.channels.get(source.channelId);
 		if (!channel) return;

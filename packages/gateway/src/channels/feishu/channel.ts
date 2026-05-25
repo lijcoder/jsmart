@@ -448,6 +448,12 @@ export class FeishuChannel implements Channel {
 			this.activeSources.delete(source.sessionId);
 			return;
 		}
+
+		// handle slash command
+		if (event.type === "slash_command") {
+			await this._sendText(meta, event.message, true);
+			return;
+		}
 	}
 
 	private _extractText(content?: { type: string; text?: string }[]): string {
