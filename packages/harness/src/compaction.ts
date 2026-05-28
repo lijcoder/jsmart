@@ -80,6 +80,55 @@ export function getLastAssistantUsage(entries: SessionEntry[]): Usage | undefine
 	return undefined;
 }
 
+export interface ContextUsageEstimate {
+	tokens: number;
+	usageTokens: number;
+	trailingTokens: number;
+	lastUsageIndex: number | null;
+}
+
+function getLastAssistantUsageInfo(messages: AgentMessage[]): { usage: Usage; index: number } | undefined {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const usage = getAssistantUsage(messages[i]);
+		if (usage) return { usage, index: i };
+	}
+	return undefined;
+}
+
+/**
+ * Estimate context tokens from messages, using the last assistant usage when available.
+ * If there are messages after the last usage, estimate their tokens with estimateTokens.
+ */
+export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEstimate {
+	const usageInfo = getLastAssistantUsageInfo(messages);
+
+	if (!usageInfo) {
+		let estimated = 0;
+		for (const message of messages) {
+			estimated += estimateTokens(message);
+		}
+		return {
+			tokens: estimated,
+			usageTokens: 0,
+			trailingTokens: estimated,
+			lastUsageIndex: null,
+		};
+	}
+
+	const usageTokens = calculateContextTokens(usageInfo.usage);
+	let trailingTokens = 0;
+	for (let i = usageInfo.index + 1; i < messages.length; i++) {
+		trailingTokens += estimateTokens(messages[i]);
+	}
+
+	return {
+		tokens: usageTokens + trailingTokens,
+		usageTokens,
+		trailingTokens,
+		lastUsageIndex: usageInfo.index,
+	};
+}
+
 // ============================================================================
 // Token estimation
 // ============================================================================

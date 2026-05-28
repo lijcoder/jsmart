@@ -114,6 +114,15 @@ function loadEntriesFromFile(filePath: string): FileEntry[] {
 	return entries;
 }
 
+export function getLatestCompactionEntry(entries: SessionEntry[]): CompactionEntry | null {
+	for (let i = entries.length - 1; i >= 0; i--) {
+		if (entries[i].type === "compaction") {
+			return entries[i] as CompactionEntry;
+		}
+	}
+	return null;
+}
+
 export function buildSessionContext(entries: SessionEntry[]): SessionContext {
 	let thinkingLevel = "off";
 	let model: { provider: string; modelId: string } | null = null;

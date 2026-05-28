@@ -86,7 +86,8 @@ export class CodingSession {
 
 	/** Run context compaction */
 	async compact(): Promise<ResultState<{ summary: string; tokensBefore: number }>> {
-		return this.agentSession.runCompaction();
+		const { summary, tokensBefore } = await this.agentSession.compact();
+		return { isSuccess: true, result: { summary: summary, tokensBefore: tokensBefore } };
 	}
 
 	/** Get current context token count */
