@@ -99,6 +99,7 @@ ajv.addSchema(ModelsConfigSchema, "ModelsConfig");
 type ModelsConfig = Static<typeof ModelsConfigSchema>;
 
 interface ProviderConfig {
+	provider: string;
 	apiKey?: string;
 	headers?: Record<string, string>;
 }
@@ -167,6 +168,7 @@ export class ModelManager {
 			const providerConfigs = new Map<string, ProviderConfig>();
 			for (const [providerName, providerConfig] of Object.entries(config.providers)) {
 				providerConfigs.set(providerName, {
+					provider: providerName,
 					apiKey: providerConfig.apiKey,
 					headers: providerConfig.headers,
 				});
@@ -239,6 +241,24 @@ export class ModelManager {
 	 */
 	find(provider: string, modelId: string): Model<Api> | undefined {
 		return this.models.find((m) => m.provider === provider && m.id === modelId);
+	}
+
+	/**
+	 * add model
+	 */
+	addModels(models: Model<Api>[]) {
+		this.models.push(...models);
+	}
+
+	/**
+	 * add Providers
+	 */
+	addProviders(providers: ProviderConfig[]) {
+		for (const p of providers) {
+			if (!this.providerConfigs.has(p.provider)) {
+				this.providerConfigs.set(p.provider, p);
+			}
+		}
 	}
 
 	/**

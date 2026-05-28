@@ -4,6 +4,7 @@ import {
 	loadPromptTemplateFromDirs,
 	ModelManager,
 	SessionManager,
+	SettingsManager,
 } from "@jsmart/jsmart-harness";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
@@ -45,6 +46,7 @@ export class CodingSession {
 		// Create agent session
 		this.agentSession = new AgentSession(
 			projectDir,
+			new SettingsManager({}),
 			sessionManager,
 			resourceLoader,
 			modelManager,

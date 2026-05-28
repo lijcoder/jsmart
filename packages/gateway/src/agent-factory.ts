@@ -4,6 +4,7 @@ import {
 	loadPromptTemplate,
 	type ModelManager,
 	SessionManager,
+	SettingsManager,
 } from "@jsmart/jsmart-harness";
 import { existsSync, mkdirSync } from "fs";
 import type { Settings } from "./config.js";
@@ -60,6 +61,7 @@ export function createAgentSession(
 
 	return new AgentSession(
 		workspaceDir,
+		new SettingsManager({}),
 		sessionManager,
 		resourceLoader,
 		modelManager,

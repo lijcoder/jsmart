@@ -1,4 +1,4 @@
-import type { AgentTool } from "@jsmart/jsmart-agent-core";
+import type { AgentTool, StreamFn } from "@jsmart/jsmart-agent-core";
 import { Agent, type AgentEvent } from "@jsmart/jsmart-agent-core";
 import type { Api, AssistantMessage, Model } from "@jsmart/jsmart-ai";
 import { isContextOverflow } from "@jsmart/jsmart-ai";
@@ -8,7 +8,9 @@ import type { ModelManager } from "./model-manager.js";
 import { buildSystemPrompt } from "./prompts.js";
 import type { ResourceLoader } from "./resource-manager.js";
 import type { SessionManager } from "./session-manager.js";
+import type { SettingsManager } from "./settings-manager.js";
 import { createTools } from "./tools/index.js";
+import { sleep } from "./utils/sleep.js";
 
 export interface ResultState<T> {
 	isSuccess: boolean;
@@ -16,7 +18,11 @@ export interface ResultState<T> {
 	result?: T;
 }
 /** Session-specific events that extend the core AgentEvent */
-export type AgentSessionEvent = AgentEvent | { type: "slash_command"; name: string; message: string };
+export type AgentSessionEvent =
+	| AgentEvent
+	| { type: "slash_command"; name: string; message: string }
+	| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
+	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
 
 /** Listener function for agent session events */
 export type AgentSessionEventListener = (event: AgentSessionEvent, signal?: AbortSignal) => void;
@@ -28,13 +34,16 @@ export interface AgentSessionOptions {
 	customContent?: string | (() => string);
 	/** Additional tools to append to the default tool set */
 	additionalTools?: AgentTool<any>[];
+	streamFn?: StreamFn;
 }
 
 export class AgentSession {
 	private workspace: string;
 	private sessionManager: SessionManager;
 	private resourceLoader: ResourceLoader;
+	private settingsManager: SettingsManager;
 
+	// model state
 	private providerName: string;
 	private modelName: string;
 	private modelManager: ModelManager;
@@ -50,8 +59,13 @@ export class AgentSession {
 	private _overflowRecoveryAttempted = false;
 	private _lastAssistantMessage: AssistantMessage | undefined = undefined;
 
+	// Retry state
+	private _retryAttempt = 0;
+	private _retryAbortController: AbortController | undefined = undefined;
+
 	constructor(
 		workspace: string,
+		settingsManager: SettingsManager,
 		sessionManager: SessionManager,
 		resourceLoader: ResourceLoader,
 		modelManager: ModelManager,
@@ -60,6 +74,7 @@ export class AgentSession {
 		options?: AgentSessionOptions,
 	) {
 		this.workspace = workspace;
+		this.settingsManager = settingsManager;
 		this.sessionManager = sessionManager;
 		this.resourceLoader = resourceLoader;
 		this.modelManager = modelManager;
@@ -77,6 +92,7 @@ export class AgentSession {
 			getApiKey: async (provider) => {
 				return this.modelManager.getApiKeyForProvider(provider);
 			},
+			streamFn: options?.streamFn,
 		});
 		const executor = createExecutor();
 		const tools = createTools(executor);
@@ -108,31 +124,44 @@ export class AgentSession {
 	};
 
 	private async _processAgentEvent(event: AgentEvent, signal: AbortSignal): Promise<void> {
-		// Handle session persistence
+		if (event.type === "message_start") {
+			if (event.message.role === "user") {
+				this._overflowRecoveryAttempted = false;
+			}
+		}
+
 		if (event.type === "message_end") {
 			if (
 				event.message.role === "user" ||
 				event.message.role === "assistant" ||
 				event.message.role === "toolResult"
 			) {
-				// Regular LLM message - persist as SessionMessageEntry
+				// record session histroy
 				this.sessionManager.appendMessage(event.message);
 			}
 
-			// Track assistant message for auto-compaction (checked on agent_end)
 			if (event.message.role === "assistant") {
-				this._lastAssistantMessage = event.message as AssistantMessage;
-				if ((event.message as AssistantMessage).stopReason !== "error") {
+				// track last assistant message
+				this._lastAssistantMessage = event.message;
+
+				const assistantMsg = event.message as AssistantMessage;
+
+				// Track assistant message for auto-compaction (checked on agent_end)
+				if (assistantMsg.stopReason !== "error") {
 					this._overflowRecoveryAttempted = false;
 				}
-			}
-		}
 
-		// Check auto-compaction after agent completes
-		if (event.type === "agent_end" && this._lastAssistantMessage) {
-			const msg = this._lastAssistantMessage;
-			this._lastAssistantMessage = undefined;
-			await this._checkCompaction(msg);
+				// Reset retry counter immediately on successful assistant response
+				// This prevents accumulation across multiple LLM calls within a turn
+				if (assistantMsg.stopReason !== "error" && this._retryAttempt > 0) {
+					this._emit({
+						type: "auto_retry_end",
+						success: true,
+						attempt: this._retryAttempt,
+					});
+					this._retryAttempt = 0;
+				}
+			}
 		}
 
 		// Notify all listeners
@@ -160,7 +189,8 @@ export class AgentSession {
 
 	async prompt(text: string): Promise<void> {
 		// slash command execute
-		if (text.startsWith("/")) {
+		const userText = text.trim();
+		if (userText.startsWith("/")) {
 			if (this._slashCommand(text)) {
 				return;
 			}
@@ -170,13 +200,19 @@ export class AgentSession {
 			this.agent.steer({
 				role: "user",
 				timestamp: Date.now(),
-				content: text,
+				content: userText,
 			});
 			return;
 		}
-		// Wait for the agent to finish processing any current prompt before sending a new one
-		await this.agent.waitForIdle();
-		await this.agent.prompt(text);
+
+		try {
+			await this.agent.prompt(userText);
+			while (await this._handlePostAgentRun()) {
+				await this.agent.continue();
+			}
+		} finally {
+			// ignore
+		}
 	}
 
 	_slashCommand(text: string): boolean {
@@ -249,6 +285,10 @@ export class AgentSession {
 		return `${this.providerName}/${this.modelName}`;
 	}
 
+	getModel(): Model<any> | undefined {
+		return this.agent.state.model;
+	}
+
 	changeModel(providerName: string, modelName: string): ResultState<void> {
 		const model = this.modelManager.find(providerName, modelName);
 		if (!model) {
@@ -284,6 +324,126 @@ export class AgentSession {
 		return shouldCompact(tokens, contextWindow, DEFAULT_COMPACTION_SETTINGS);
 	}
 
+	private async _handlePostAgentRun(): Promise<boolean> {
+		const msg = this._lastAssistantMessage;
+		this._lastAssistantMessage = undefined;
+		if (!msg) {
+			return false;
+		}
+
+		// retry
+		if (this._isRetryableError(msg) && (await this._prepareRetry(msg))) {
+			return true;
+		}
+
+		if (msg.stopReason === "error" && this._retryAttempt > 0) {
+			this._emit({
+				type: "auto_retry_end",
+				success: false,
+				attempt: this._retryAttempt,
+				finalError: msg.errorMessage,
+			});
+			this._retryAttempt = 0;
+		}
+
+		// compact
+		return await this._checkCompaction(msg);
+	}
+
+	// =========================================================================
+	// Auto-Retry
+	// =========================================================================
+
+	/**
+	 * Check if an error is retryable (overloaded, rate limit, server errors).
+	 * Context overflow errors are NOT retryable (handled by compaction instead).
+	 */
+	private _isRetryableError(message: AssistantMessage): boolean {
+		if (message.stopReason !== "error" || !message.errorMessage) return false;
+
+		// Context overflow is handled by compaction, not retry
+		const contextWindow = this.getModel()?.contextWindow ?? 0;
+		if (isContextOverflow(message, contextWindow)) return false;
+
+		const err = message.errorMessage;
+		// Match: overloaded_error, provider returned error, rate limit, 429, 500, 502, 503, 504, service unavailable, network/connection errors (including connection lost), WebSocket transport closes/errors, fetch failed, premature stream endings, HTTP/2 closed before response, terminated, retry delay exceeded
+		return /overloaded|provider.?returned.?error|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server.?error|internal.?error|network.?error|connection.?error|connection.?refused|connection.?lost|websocket.?closed|websocket.?error|other side closed|fetch failed|upstream.?connect|reset before headers|socket hang up|ended without|stream ended before message_stop|http2 request did not get a response|timed? out|timeout|terminated|retry delay/i.test(
+			err,
+		);
+	}
+
+	/**
+	 * Prepare a retryable error for continuation with exponential backoff.
+	 * @returns true if the caller should continue the agent, false otherwise
+	 */
+	private async _prepareRetry(message: AssistantMessage): Promise<boolean> {
+		const settings = this.settingsManager.getRetrySettings();
+		if (!settings.enabled) {
+			return false;
+		}
+
+		this._retryAttempt++;
+
+		if (this._retryAttempt > settings.maxRetries) {
+			// Preserve the completed attempt count so post-run handling can emit the final failure.
+			this._retryAttempt--;
+			return false;
+		}
+
+		const delayMs = settings.baseDelayMs * 2 ** (this._retryAttempt - 1);
+
+		this._emit({
+			type: "auto_retry_start",
+			attempt: this._retryAttempt,
+			maxAttempts: settings.maxRetries,
+			delayMs,
+			errorMessage: message.errorMessage || "Unknown error",
+		});
+
+		// Remove error message from agent state (keep in session for history)
+		const messages = this.agent.state.messages;
+		if (messages.length > 0 && messages[messages.length - 1].role === "assistant") {
+			this.agent.state.messages = messages.slice(0, -1);
+		}
+
+		// Wait with exponential backoff (abortable)
+		this._retryAbortController = new AbortController();
+		try {
+			await sleep(delayMs, this._retryAbortController.signal);
+		} catch {
+			// Aborted during sleep - emit end event so UI can clean up
+			const attempt = this._retryAttempt;
+			this._retryAttempt = 0;
+			this._emit({
+				type: "auto_retry_end",
+				success: false,
+				attempt,
+				finalError: "Retry cancelled",
+			});
+			return false;
+		} finally {
+			this._retryAbortController = undefined;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Cancel in-progress retry.
+	 */
+	abortRetry(): void {
+		this._retryAbortController?.abort();
+	}
+
+	/** Whether auto-retry is currently in progress */
+	get isRetrying(): boolean {
+		return this._retryAbortController !== undefined;
+	}
+
+	// =========================================================================
+	// Auto-Compact
+	// =========================================================================
+
 	/**
 	 * Check if compaction is needed and run it.
 	 * Called after agent_end.
@@ -292,15 +452,15 @@ export class AgentSession {
 	 * 1. Overflow: LLM returned context overflow error, remove error message from agent state, compact, auto-retry
 	 * 2. Threshold: Context over threshold, compact, NO auto-retry (user continues manually)
 	 */
-	private async _checkCompaction(assistantMessage: AssistantMessage): Promise<void> {
-		const settings = DEFAULT_COMPACTION_SETTINGS;
-		if (!settings.enabled) return;
+	private async _checkCompaction(assistantMessage: AssistantMessage): Promise<boolean> {
+		const settings = this.settingsManager.getCompactionSettings();
+		if (!settings.enabled) return false;
 
 		// Skip if message was aborted (user cancelled)
-		if (assistantMessage.stopReason === "aborted") return;
+		if (assistantMessage.stopReason === "aborted") return false;
 
 		const model = this.agent.state.model;
-		if (!model) return;
+		if (!model) return false;
 
 		const contextWindow = model.contextWindow ?? 0;
 
@@ -311,7 +471,7 @@ export class AgentSession {
 		if (sameModel && isContextOverflow(assistantMessage, contextWindow)) {
 			if (this._overflowRecoveryAttempted) {
 				console.error("Context overflow recovery failed after one compact-and-retry attempt.");
-				return;
+				return false;
 			}
 
 			this._overflowRecoveryAttempted = true;
@@ -322,13 +482,13 @@ export class AgentSession {
 				this.agent.state.messages = messages.slice(0, -1);
 			}
 			await this._runAutoCompaction("overflow", true);
-			return;
+			return true;
 		}
 
 		// Case 2: Threshold - context is getting large
 		// For error messages (no usage data), skip compaction
 		if (assistantMessage.stopReason === "error") {
-			return;
+			return false;
 		}
 
 		const contextTokens =
@@ -337,7 +497,9 @@ export class AgentSession {
 
 		if (shouldCompact(contextTokens, contextWindow, settings)) {
 			await this._runAutoCompaction("threshold", false);
+			return true;
 		}
+		return false;
 	}
 
 	/**

@@ -3,6 +3,7 @@ import { AgentSession } from "../src/agent-session.js";
 import { ModelManager } from "../src/model-manager.js";
 import { DefaultResourceLoader } from "../src/resource-manager.js";
 import { SessionManager } from "../src/session-manager.js";
+import { SettingsManager } from "../src/settings-manager.js";
 import { agentSubscriberFormat } from "./agent-session.out.js";
 
 const workspace = process.env.JIE_TEST_WORKSPACE!;
@@ -14,7 +15,16 @@ const skillPaths = process.env.JIE_TEST_SKILL_PATHS!.split(",");
 const modelManager = new ModelManager(modelFile);
 const resourceLoader = new DefaultResourceLoader({ skillPaths: skillPaths, noSkills: false });
 const sessionManager = new SessionManager(true, sessionFile);
-const agentSession = new AgentSession(workspace, sessionManager, resourceLoader, modelManager, providerName, modelName);
+const settingsManager = new SettingsManager({});
+const agentSession = new AgentSession(
+	workspace,
+	settingsManager,
+	sessionManager,
+	resourceLoader,
+	modelManager,
+	providerName,
+	modelName,
+);
 agentSession.subscribe(agentSubscriberFormat);
 
 function parseCommand(input: string): string[] {
