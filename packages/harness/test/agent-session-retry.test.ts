@@ -49,7 +49,7 @@ describe("AgentSession retry", () => {
 	let tempDir: string;
 
 	beforeEach(() => {
-		tempDir = join(tmpdir(), `pi-retry-test-${Date.now()}`);
+		tempDir = join(tmpdir(), `jsmart-retry-test-${Date.now()}`);
 		mkdirSync(tempDir, { recursive: true });
 	});
 

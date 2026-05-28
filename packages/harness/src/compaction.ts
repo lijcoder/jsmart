@@ -6,7 +6,7 @@
  */
 
 import type { AgentMessage } from "@jsmart/jsmart-agent-core";
-import type { Api, Message, Model } from "@jsmart/jsmart-ai";
+import type { Api, AssistantMessage, Message, Model, Usage } from "@jsmart/jsmart-ai";
 import { completeSimple } from "@jsmart/jsmart-ai";
 import type { CompactionEntry, SessionEntry, SessionMessageEntry } from "./session-manager.js";
 
@@ -29,7 +29,9 @@ export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
 export interface CutPointResult {
 	/** Index of first entry to keep */
 	firstKeptEntryIndex: number;
-	/** Whether this is a split turn (cut point is not a user message) */
+	/** Index of user message that starts the turn being split, or -1 if not splitting */
+	turnStartIndex: number;
+	/** Whether this cut splits a turn (cut point is not a user message) */
 	isSplitTurn: boolean;
 }
 
@@ -37,6 +39,45 @@ export interface CompactionResult {
 	summary: string;
 	firstKeptEntryId: string;
 	tokensBefore: number;
+}
+
+// ============================================================================
+// Token calculation
+// ============================================================================
+/**
+ * Calculate total context tokens from usage.
+ * Uses the native totalTokens field when available, falls back to computing from components.
+ */
+export function calculateContextTokens(usage: Usage): number {
+	return usage.totalTokens || usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
+}
+
+/**
+ * Get usage from an assistant message if available.
+ * Skips aborted and error messages as they don't have valid usage data.
+ */
+function getAssistantUsage(msg: AgentMessage): Usage | undefined {
+	if (msg.role === "assistant" && "usage" in msg) {
+		const assistantMsg = msg as AssistantMessage;
+		if (assistantMsg.stopReason !== "aborted" && assistantMsg.stopReason !== "error" && assistantMsg.usage) {
+			return assistantMsg.usage;
+		}
+	}
+	return undefined;
+}
+
+/**
+ * Find the last non-aborted assistant message usage from session entries.
+ */
+export function getLastAssistantUsage(entries: SessionEntry[]): Usage | undefined {
+	for (let i = entries.length - 1; i >= 0; i--) {
+		const entry = entries[i];
+		if (entry.type === "message") {
+			const usage = getAssistantUsage(entry.message);
+			if (usage) return usage;
+		}
+	}
+	return undefined;
 }
 
 // ============================================================================
@@ -164,7 +205,7 @@ export function findCutPoint(
 	const cutPoints = findValidCutPoints(entries, startIndex, endIndex);
 
 	if (cutPoints.length === 0) {
-		return { firstKeptEntryIndex: startIndex, isSplitTurn: false };
+		return { firstKeptEntryIndex: startIndex, turnStartIndex: -1, isSplitTurn: false };
 	}
 
 	// Walk backwards from newest, accumulating estimated message sizes
@@ -197,6 +238,7 @@ export function findCutPoint(
 
 	return {
 		firstKeptEntryIndex: cutIndex,
+		turnStartIndex: turnStartIndex,
 		isSplitTurn: !isUserMessage && turnStartIndex !== -1,
 	};
 }

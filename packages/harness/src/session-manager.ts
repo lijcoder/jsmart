@@ -3,6 +3,7 @@ import type { Message } from "@jsmart/jsmart-ai";
 import { randomUUID } from "crypto";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
+import { createCompactionSummaryMessage } from "./messages.js";
 
 const CURRENT_SESSION_VERSION = 1;
 
@@ -32,14 +33,27 @@ export interface CompactionEntry extends SessionEntryBase {
 	tokensBefore: number;
 }
 
+export interface ModelChangeEntry extends SessionEntryBase {
+	type: "model_change";
+	provider: string;
+	modelId: string;
+}
+
+export interface ThinkingLevelChangeEntry extends SessionEntryBase {
+	type: "thinking_level_change";
+	thinkingLevel: string;
+}
+
 /** Session entry - has id/parentId for tree structure (returned by "read" methods in SessionManager) */
-export type SessionEntry = SessionMessageEntry | CompactionEntry;
+export type SessionEntry = SessionMessageEntry | CompactionEntry | ModelChangeEntry | ThinkingLevelChangeEntry;
 
 /** Raw file entry (includes header) */
 export type FileEntry = SessionHeader | SessionEntry;
 
 export interface SessionContext {
 	messages: AgentMessage[];
+	thinkingLevel: string;
+	model: { provider: string; modelId: string } | null;
 }
 
 export interface SessionInfo {
@@ -98,6 +112,58 @@ function loadEntriesFromFile(filePath: string): FileEntry[] {
 	}
 
 	return entries;
+}
+
+export function buildSessionContext(entries: SessionEntry[]): SessionContext {
+	let thinkingLevel = "off";
+	let model: { provider: string; modelId: string } | null = null;
+	let compactionEntry: CompactionEntry | undefined;
+	let firstKeptId: string | undefined;
+
+	for (const e of entries) {
+		if (e.type === "compaction") {
+			// 记录最近的 compaction summary，后续消息从 firstKeptEntryId 开始
+			compactionEntry = e;
+			firstKeptId = e.firstKeptEntryId;
+		} else if (e.type === "thinking_level_change") {
+			thinkingLevel = e.thinkingLevel;
+		} else if (e.type === "model_change") {
+			model = { provider: e.provider, modelId: e.modelId };
+		} else if (e.type === "message" && e.message.role === "assistant") {
+			model = { provider: e.message.provider, modelId: e.message.model };
+		}
+	}
+
+	const messages: AgentMessage[] = [];
+	let includeMessages = false;
+	for (const e of entries) {
+		if (e.type === "message") {
+			// 如果有 compaction，只从 firstKeptEntryId 开始包含消息
+			if (firstKeptId && !includeMessages) {
+				if (e.id === firstKeptId) {
+					includeMessages = true;
+				} else {
+					continue;
+				}
+			}
+			if (includeMessages || !firstKeptId) {
+				messages.push(e.message);
+			}
+		}
+	}
+
+	// 如果有 compaction summary，作为第一条 user 消息插入（作为上下文提示）
+	if (compactionEntry) {
+		messages.unshift(
+			createCompactionSummaryMessage(
+				compactionEntry.summary,
+				compactionEntry.tokensBefore,
+				compactionEntry.timestamp,
+			),
+		);
+	}
+
+	return { messages, thinkingLevel, model };
 }
 
 export class SessionManager {
@@ -211,48 +277,9 @@ export class SessionManager {
 
 	buildSessionContext(): SessionContext {
 		if (!(this.persist && this.sessionFile)) {
-			return { messages: [] };
+			return { messages: [], thinkingLevel: "off", model: null };
 		}
-		const fileEntries: FileEntry[] = loadEntriesFromFile(this.sessionFile);
-		const messages: AgentMessage[] = [];
-		let compactionSummary: string | undefined;
-		let firstKeptId: string | undefined;
-
-		for (const e of fileEntries) {
-			if (e.type === "compaction") {
-				// 记录最近的 compaction summary，后续消息从 firstKeptEntryId 开始
-				compactionSummary = e.summary;
-				firstKeptId = e.firstKeptEntryId;
-			}
-		}
-
-		let includeMessages = false;
-		for (const e of fileEntries) {
-			if (e.type === "message") {
-				// 如果有 compaction，只从 firstKeptEntryId 开始包含消息
-				if (firstKeptId && !includeMessages) {
-					if (e.id === firstKeptId) {
-						includeMessages = true;
-					} else {
-						continue;
-					}
-				}
-				if (includeMessages || !firstKeptId) {
-					messages.push(e.message);
-				}
-			}
-		}
-
-		// 如果有 compaction summary，作为第一条 user 消息插入（作为上下文提示）
-		if (compactionSummary) {
-			messages.unshift({
-				role: "user",
-				content: `## Previous Context Summary\n\n${compactionSummary}`,
-				timestamp: Date.now(),
-			} as AgentMessage);
-		}
-
-		return { messages };
+		return buildSessionContext(this.getEntries());
 	}
 
 	/** Get session header */

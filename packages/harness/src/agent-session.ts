@@ -4,6 +4,7 @@ import type { Api, AssistantMessage, Model } from "@jsmart/jsmart-ai";
 import { isContextOverflow } from "@jsmart/jsmart-ai";
 import { compact, DEFAULT_COMPACTION_SETTINGS, estimateTotalTokens, shouldCompact } from "./compaction.js";
 import { createExecutor } from "./executor.js";
+import { convertToLlm } from "./messages.js";
 import type { ModelManager } from "./model-manager.js";
 import { buildSystemPrompt } from "./prompts.js";
 import type { ResourceLoader } from "./resource-manager.js";
@@ -93,6 +94,7 @@ export class AgentSession {
 				return this.modelManager.getApiKeyForProvider(provider);
 			},
 			streamFn: options?.streamFn,
+			convertToLlm: convertToLlm,
 		});
 		const executor = createExecutor();
 		const tools = createTools(executor);
@@ -261,6 +263,12 @@ export class AgentSession {
 		}
 		return false;
 	}
+
+	/**
+	 * Remove all listeners and disconnect from agent.
+	 * Call this when completely done with the session.
+	 */
+	dispose(): void {}
 
 	/** Abort the current agent run, if one is active. */
 	abort(): Promise<void> {
