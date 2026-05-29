@@ -221,7 +221,7 @@ describe("AgentSession retry", () => {
 		let callCount = 0;
 		const agentSessionOption: AgentSessionOptions = {
 			promptTemplate: "",
-			additionalTools: [echoTool],
+			tools: [echoTool],
 			streamFn: () => {
 				callCount++;
 				const stream = new MockAssistantStream();

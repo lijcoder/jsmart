@@ -1,5 +1,7 @@
 import {
 	AgentSession,
+	createExecutor,
+	createTools,
 	loadPromptTemplate,
 	type ModelManager,
 	SessionManager,
@@ -63,10 +65,19 @@ export function createAgentSession(
 		skillPaths: [...(globalAgentSettings.skillPaths ?? []), ...(templateAgentSettings.skillPaths ?? [])],
 	};
 
-	return new AgentSession(workspaceDir, new SettingsManager(mergedAgentSettings), sessionManager, modelManager, {
-		promptTemplate: promptTemplate ?? undefined,
-		additionalTools: createGatewayTools(),
-	});
+	const tools = [...createTools(createExecutor()), ...createGatewayTools()];
+
+	const session = new AgentSession(
+		workspaceDir,
+		new SettingsManager(mergedAgentSettings),
+		sessionManager,
+		modelManager,
+		{
+			promptTemplate: promptTemplate ?? undefined,
+			tools,
+		},
+	);
+	return session;
 }
 
 /** Find a route by ID across all channels */

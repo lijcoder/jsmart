@@ -51,8 +51,8 @@ export interface AgentSessionOptions {
 	promptTemplate?: string;
 	/** 自定义内容，替换 {{custom}} 占位符 */
 	customContent?: string | (() => string);
-	/** Additional tools to append to the default tool set */
-	additionalTools?: AgentTool<any>[];
+	/** Tools to use. If not provided, defaults to createTools(createExecutor()) */
+	tools?: AgentTool<any>[];
 	streamFn?: StreamFn;
 }
 
@@ -117,11 +117,7 @@ export class AgentSession {
 			streamFn: options?.streamFn,
 			convertToLlm: convertToLlm,
 		});
-		const executor = createExecutor();
-		const tools = createTools(executor);
-		if (options?.additionalTools) {
-			tools.push(...options.additionalTools);
-		}
+		const tools = options?.tools ?? createTools(createExecutor());
 		this.agent.state.tools = tools;
 		const skills = this.resourceLoader.getSkills();
 		const systemPrompt = buildSystemPrompt({

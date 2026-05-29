@@ -1,5 +1,7 @@
 import {
 	AgentSession,
+	createExecutor,
+	createTools,
 	loadPromptTemplateFromDirs,
 	ModelManager,
 	SessionManager,
@@ -27,6 +29,7 @@ export class CodingSession {
 		const sessionManager = new SessionManager(true, sessionFile);
 		const promptTemplate = loadPromptTemplateFromDirs([config.projectDirPath, config.globalDir]);
 		const customContent = loadAgentsFile(config.projectDir);
+		const tools = [...createTools(createExecutor())];
 
 		this.agentSession = new AgentSession(
 			projectDir,
@@ -36,6 +39,7 @@ export class CodingSession {
 			{
 				promptTemplate: promptTemplate ?? undefined,
 				customContent: customContent ?? undefined,
+				tools: tools,
 			},
 		);
 	}
