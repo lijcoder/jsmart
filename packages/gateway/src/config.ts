@@ -1,3 +1,4 @@
+import { type AgentSettings, AgentSettingsSchema } from "@jsmart/jsmart-harness";
 import { type Static, Type } from "@sinclair/typebox";
 import AjvModule from "ajv";
 import { existsSync, readFileSync } from "fs";
@@ -6,18 +7,9 @@ import { resolve } from "path";
 const Ajv = (AjvModule as any).default || AjvModule;
 const ajv = new Ajv();
 
-// ── Schema Definitions ──────────────────────────────────────────────
-
-const ModelRefSchema = Type.Object({
-	provider: Type.String({ minLength: 1 }),
-	model: Type.String({ minLength: 1 }),
-});
-
-/** Agent template: model + optional skills override */
+/** Agent template */
 const AgentTemplateSchema = Type.Object({
-	model: ModelRefSchema,
-	/** Override skills directory. Default: {rootDir}/agents/{name}/skills */
-	skills: Type.Optional(Type.Array(Type.String())),
+	agentSettings: Type.Optional(AgentSettingsSchema),
 });
 
 /**
@@ -64,13 +56,14 @@ const SettingsSchema = Type.Object({
 	agentTemplates: Type.Record(Type.String(), AgentTemplateSchema),
 	channels: Type.Record(Type.String(), ChannelConfigSchema),
 	channelDirs: Type.Optional(Type.Array(Type.String())),
+	agentSettings: Type.Optional(AgentSettingsSchema),
 });
 
 ajv.addSchema(SettingsSchema, "Settings");
 
 // ── Types ───────────────────────────────────────────────────────────
 
-export type ModelRef = Static<typeof ModelRefSchema>;
+export type { AgentSettings } from "@jsmart/jsmart-harness";
 export type AgentTemplate = Static<typeof AgentTemplateSchema>;
 
 /**
@@ -99,6 +92,7 @@ export interface Settings {
 	 * Paths can be absolute or relative to the config file's parent directory.
 	 */
 	channelDirs?: string[];
+	agentSettings?: AgentSettings;
 }
 
 // ── Directory Resolution ────────────────────────────────────────────

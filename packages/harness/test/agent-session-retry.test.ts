@@ -6,7 +6,6 @@ import { type AssistantMessage, type AssistantMessageEvent, EventStream, Type } 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AgentSession, type AgentSessionOptions } from "../src/agent-session.js";
 import { ModelManager } from "../src/model-manager.js";
-import { DefaultResourceLoader } from "../src/resource-manager.js";
 import { SessionManager } from "../src/session-manager.js";
 import { SettingsManager } from "../src/settings-manager.js";
 
@@ -96,16 +95,13 @@ describe("AgentSession retry", () => {
 			},
 		};
 		const sessionManager = new SessionManager(false, sessionFile);
-		const resourceManager = new DefaultResourceLoader({
-			noSkills: true,
-		});
 		const modelManager = ModelManager.create(undefined);
 		modelManager.addModels([
 			{
 				id: defaultModel,
 				name: defaultModel,
 				api: "openai-completions",
-				provider: "test",
+				provider: defaultProdiver,
 				baseUrl: "http://test.com/api",
 				reasoning: true,
 				input: ["text", "image"],
@@ -122,22 +118,14 @@ describe("AgentSession retry", () => {
 			},
 		]);
 		const settingsManager = new SettingsManager({
+			defaultModel: { provider: defaultProdiver, model: defaultModel },
 			retry: {
 				enabled: true,
 				maxRetries: maxRetries,
 				baseDelayMs: 1,
 			},
 		});
-		session = new AgentSession(
-			workspaces,
-			settingsManager,
-			sessionManager,
-			resourceManager,
-			modelManager,
-			defaultProdiver,
-			defaultModel,
-			agentSessionOption,
-		);
+		session = new AgentSession(workspaces, settingsManager, sessionManager, modelManager, agentSessionOption);
 		return { session, getCallCount: () => callCount };
 	}
 

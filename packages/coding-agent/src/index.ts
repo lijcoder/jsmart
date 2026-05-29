@@ -9,5 +9,5 @@ export {
 	type ResolvedConfig,
 	type SessionFileInfo,
 } from "./config.js";
-export type { CodingSettings, ModelRef } from "./config-schema.js";
+export type { CodingSettings, ModelSettings } from "./config-schema.js";
 export { colorize, handleAgentEvent } from "./event-output.js";

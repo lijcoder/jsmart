@@ -43,7 +43,14 @@ export type {
 	SessionMessageEntry,
 } from "./session-manager.js";
 export { SessionManager } from "./session-manager.js";
-export { SettingsManager } from "./settings-manager.js";
+export type { AgentSettings, ModelSettings, RetrySettings, Settings } from "./settings-manager.js";
+export {
+	AgentSettingsSchema,
+	CompactionSettingsSchema,
+	ModelSettingsSchema,
+	RetrySettingsSchema,
+	SettingsManager,
+} from "./settings-manager.js";
 export type { LoadSkillsFromDirOptions, LoadSkillsResult, Skill } from "./skills.js";
 export { loadSkillsFromDir } from "./skills.js";
 export { createTools } from "./tools/index.js";

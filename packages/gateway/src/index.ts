@@ -12,11 +12,11 @@ export {
 } from "./channels/index.js";
 // Config
 export {
+	type AgentSettings,
 	type AgentTemplate,
 	type ChannelConfig,
 	type LoadSettingsResult,
 	loadSettings,
-	type ModelRef,
 	type Route,
 	resolveAgentDir,
 	resolveAgentSessionsDir,

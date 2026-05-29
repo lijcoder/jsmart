@@ -16,7 +16,7 @@ import { createExecutor } from "./executor.js";
 import { convertToLlm } from "./messages.js";
 import type { ModelManager } from "./model-manager.js";
 import { buildSystemPrompt } from "./prompts.js";
-import type { ResourceLoader } from "./resource-manager.js";
+import { DefaultResourceLoader, type ResourceLoader } from "./resource-manager.js";
 import { getLatestCompactionEntry, type SessionManager } from "./session-manager.js";
 import type { SettingsManager } from "./settings-manager.js";
 import { createTools } from "./tools/index.js";
@@ -88,25 +88,26 @@ export class AgentSession {
 		workspace: string,
 		settingsManager: SettingsManager,
 		sessionManager: SessionManager,
-		resourceLoader: ResourceLoader,
 		modelManager: ModelManager,
-		providerName: string,
-		modelName: string,
 		options?: AgentSessionOptions,
 	) {
 		this.workspace = workspace;
 		this.settingsManager = settingsManager;
 		this.sessionManager = sessionManager;
-		this.resourceLoader = resourceLoader;
 		this.modelManager = modelManager;
-		this.providerName = providerName;
-		this.modelName = modelName;
+		this.resourceLoader = new DefaultResourceLoader({
+			skillPaths: settingsManager.getSkillPaths(),
+			noSkills: settingsManager.getNoSkills(),
+		});
+		const defaultModel = settingsManager.getDefaultModel();
+		this.providerName = defaultModel?.provider ?? "";
+		this.modelName = defaultModel?.model ?? "";
 		const model: Model<Api> | undefined = this.modelManager.find(this.providerName, this.modelName);
 		const { messages } = this.sessionManager.buildSessionContext();
 		this.agent = new Agent({
 			initialState: {
 				model: model,
-				thinkingLevel: "medium",
+				thinkingLevel: defaultModel?.thinkingLevel ?? "off",
 				messages: messages,
 			},
 			toolExecution: "sequential",
@@ -514,15 +515,18 @@ export class AgentSession {
 		this._disconnectFromAgent();
 		await this.abort();
 		this._compactionAbortController = new AbortController();
-		const model: Model<Api> | undefined = this.modelManager.find(this.providerName, this.modelName);
-		const modelApiKey = await this.modelManager.getApiKeyForProvider(this.providerName);
+		const compactionRef = this.settingsManager.getCompactionModel();
+		const compProvider = compactionRef?.provider ?? this.providerName;
+		const compModel = compactionRef?.model ?? this.modelName;
+		const model: Model<Api> | undefined = this.modelManager.find(compProvider, compModel);
+		const modelApiKey = await this.modelManager.getApiKeyForProvider(compProvider);
 		try {
 			if (!model) {
 				throw new Error("No model selected");
 			}
 
 			if (!modelApiKey) {
-				throw new Error(`No API key for ${this.providerName}`);
+				throw new Error(`No API key for ${compProvider}`);
 			}
 
 			const pathEntries = this.sessionManager.getEntries();
@@ -667,8 +671,11 @@ export class AgentSession {
 
 		this._emit({ type: "compaction_start", reason });
 		this._autoCompactionAbortController = new AbortController();
-		const model: Model<Api> | undefined = this.modelManager.find(this.providerName, this.modelName);
-		const modelApiKey = await this.modelManager.getApiKeyForProvider(this.providerName);
+		const compactionRef = this.settingsManager.getCompactionModel();
+		const compProvider = compactionRef?.provider ?? this.providerName;
+		const compModel = compactionRef?.model ?? this.modelName;
+		const model: Model<Api> | undefined = this.modelManager.find(compProvider, compModel);
+		const modelApiKey = await this.modelManager.getApiKeyForProvider(compProvider);
 
 		try {
 			if (!model || !modelApiKey) {

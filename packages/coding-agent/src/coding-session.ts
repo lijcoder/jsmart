@@ -1,6 +1,5 @@
 import {
 	AgentSession,
-	DefaultResourceLoader,
 	loadPromptTemplateFromDirs,
 	ModelManager,
 	SessionManager,
@@ -24,34 +23,16 @@ export class CodingSession {
 		// Generate session file path (use sessionId to resume if provided)
 		const sessionFile = generateSessionFilePath(config.sessionsDir, projectDir, config.sessionId);
 
-		// Initialize components (same pattern as agent-session.test.ts)
 		const modelManager = new ModelManager(config.modelFile);
-		const resourceLoader = new DefaultResourceLoader({
-			skillPaths: config.skillPaths,
-			noSkills: config.skillPaths.length === 0,
-		});
 		const sessionManager = new SessionManager(true, sessionFile);
-
-		// Determine default model
-		const defaultModel = config.settings.defaultModel;
-		const providerName = defaultModel?.provider ?? "openai";
-		const modelName = defaultModel?.model ?? "gpt-4o";
-
-		// 从项目 .jsmart 目录加载模板，没有则从全局目录加载
 		const promptTemplate = loadPromptTemplateFromDirs([config.projectDirPath, config.globalDir]);
-
-		// 加载项目根目录下的 AGENTS.md 作为自定义内容
 		const customContent = loadAgentsFile(config.projectDir);
 
-		// Create agent session
 		this.agentSession = new AgentSession(
 			projectDir,
-			new SettingsManager({}),
+			new SettingsManager({ ...config.settings, skillPaths: config.skillPaths }),
 			sessionManager,
-			resourceLoader,
 			modelManager,
-			providerName,
-			modelName,
 			{
 				promptTemplate: promptTemplate ?? undefined,
 				customContent: customContent ?? undefined,

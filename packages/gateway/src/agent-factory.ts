@@ -1,6 +1,5 @@
 import {
 	AgentSession,
-	DefaultResourceLoader,
 	loadPromptTemplate,
 	type ModelManager,
 	SessionManager,
@@ -50,28 +49,24 @@ export function createAgentSession(
 		mkdirSync(sessionsDir, { recursive: true });
 	}
 
-	const resourceLoader = new DefaultResourceLoader({
-		skillPaths: template.skills,
-		noSkills: template.skills === undefined,
-	});
 	const sessionManager = new SessionManager(true, sessionFile);
 
 	// 从工作目录加载 prompt_template.md，没有则使用内置默认模板
 	const promptTemplate = loadPromptTemplate(workspaceDir);
 
-	return new AgentSession(
-		workspaceDir,
-		new SettingsManager({}),
-		sessionManager,
-		resourceLoader,
-		modelManager,
-		template.model.provider,
-		template.model.model,
-		{
-			promptTemplate: promptTemplate ?? undefined,
-			additionalTools: createGatewayTools(),
-		},
-	);
+	// 合并：template 级别覆盖全局，skillPaths 追加合并
+	const globalAgentSettings = config.agentSettings ?? {};
+	const templateAgentSettings = template.agentSettings ?? {};
+	const mergedAgentSettings = {
+		...globalAgentSettings,
+		...templateAgentSettings,
+		skillPaths: [...(globalAgentSettings.skillPaths ?? []), ...(templateAgentSettings.skillPaths ?? [])],
+	};
+
+	return new AgentSession(workspaceDir, new SettingsManager(mergedAgentSettings), sessionManager, modelManager, {
+		promptTemplate: promptTemplate ?? undefined,
+		additionalTools: createGatewayTools(),
+	});
 }
 
 /** Find a route by ID across all channels */

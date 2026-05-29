@@ -131,19 +131,14 @@ function loadSettingsFile(filePath: string): CodingSettings | null {
 	}
 }
 
-/** Merge two settings objects (project overrides global) */
+/** Merge two settings objects (project overrides global, skillPaths appended) */
 function mergeSettings(global: CodingSettings, project: CodingSettings): CodingSettings {
-	const merged: CodingSettings = {};
+	const merged: CodingSettings = { ...global, ...project };
 
-	// defaultModel: project overrides global
-	merged.defaultModel = project.defaultModel ?? global.defaultModel;
-
-	// skillPaths: merge both (project paths appended)
+	// skillPaths: append global + project (not override)
 	const globalSkills = global.skillPaths ?? [];
 	const projectSkills = project.skillPaths ?? [];
-	if (globalSkills.length > 0 || projectSkills.length > 0) {
-		merged.skillPaths = [...globalSkills, ...projectSkills];
-	}
+	merged.skillPaths = [...globalSkills, ...projectSkills].length > 0 ? [...globalSkills, ...projectSkills] : undefined;
 
 	return merged;
 }

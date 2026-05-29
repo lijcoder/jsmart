@@ -1,22 +1,59 @@
-export interface RetrySettings {
-	enabled?: boolean; // default: true
-	maxRetries?: number; // default: 3
-	baseDelayMs?: number; // default: 2000 (exponential backoff: 2s, 4s, 8s)
-}
+import { type Static, Type } from "@sinclair/typebox";
 
-export interface CompactionSettings {
-	enabled?: boolean; // default: true
-	reserveTokens?: number; // default: 16384
-	keepRecentTokens?: number; // default: 20000
-}
+// ── Schema ───────────────────────────────────────────────────────────
 
-export interface Settings {
+const ThinkingLevelSchema = Type.Union([
+	Type.Literal("off"),
+	Type.Literal("minimal"),
+	Type.Literal("low"),
+	Type.Literal("medium"),
+	Type.Literal("high"),
+	Type.Literal("xhigh"),
+]);
+
+export const ModelSettingsSchema = Type.Object({
+	provider: Type.String({ minLength: 1 }),
+	model: Type.String({ minLength: 1 }),
+	thinkingLevel: Type.Optional(ThinkingLevelSchema),
+});
+
+export const RetrySettingsSchema = Type.Object({
+	enabled: Type.Optional(Type.Boolean()),
+	maxRetries: Type.Optional(Type.Number()),
+	baseDelayMs: Type.Optional(Type.Number()),
+});
+
+export const CompactionSettingsSchema = Type.Object({
+	enabled: Type.Optional(Type.Boolean()),
+	reserveTokens: Type.Optional(Type.Number()),
+	keepRecentTokens: Type.Optional(Type.Number()),
+});
+
+export const AgentSettingsSchema = Type.Object({
+	defaultModel: Type.Optional(ModelSettingsSchema),
+	fallbackModel: Type.Optional(ModelSettingsSchema),
+	compactionModel: Type.Optional(ModelSettingsSchema),
+	retry: Type.Optional(RetrySettingsSchema),
+	compaction: Type.Optional(CompactionSettingsSchema),
+	skillPaths: Type.Optional(Type.Array(Type.String())),
+	noSkills: Type.Optional(Type.Boolean()),
+});
+
+// ── Types ────────────────────────────────────────────────────────────
+
+export type ModelSettings = Static<typeof ModelSettingsSchema>;
+export type RetrySettings = Static<typeof RetrySettingsSchema>;
+export type CompactionSettings = Static<typeof CompactionSettingsSchema>;
+export type AgentSettings = Static<typeof AgentSettingsSchema>;
+
+// Settings is a superset of AgentSettings with harness-only fields
+export interface Settings extends AgentSettings {
 	defaultThinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 	steeringMode?: "all" | "one-at-a-time";
 	followUpMode?: "all" | "one-at-a-time";
-	retry?: RetrySettings;
-	compaction?: CompactionSettings;
 }
+
+// ── Manager ──────────────────────────────────────────────────────────
 
 export class SettingsManager {
 	private settings: Settings;
@@ -55,5 +92,25 @@ export class SettingsManager {
 			reserveTokens: this.getCompactionReserveTokens(),
 			keepRecentTokens: this.getCompactionKeepRecentTokens(),
 		};
+	}
+
+	getSkillPaths(): string[] | undefined {
+		return this.settings.skillPaths;
+	}
+
+	getNoSkills(): boolean {
+		return this.settings.noSkills ?? false;
+	}
+
+	getDefaultModel(): ModelSettings | undefined {
+		return this.settings.defaultModel;
+	}
+
+	getFallbackModel(): ModelSettings | undefined {
+		return this.settings.fallbackModel;
+	}
+
+	getCompactionModel(): ModelSettings | undefined {
+		return this.settings.compactionModel;
 	}
 }

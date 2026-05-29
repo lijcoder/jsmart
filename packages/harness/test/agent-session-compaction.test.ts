@@ -14,7 +14,6 @@ import { type AssistantMessage, type AssistantMessageEvent, EventStream, type Us
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AgentSession, type AgentSessionEvent, type AgentSessionOptions } from "../src/agent-session.js";
 import { ModelManager } from "../src/model-manager.js";
-import { DefaultResourceLoader } from "../src/resource-manager.js";
 import { SessionManager } from "../src/session-manager.js";
 import { SettingsManager } from "../src/settings-manager.js";
 
@@ -55,16 +54,13 @@ describe.skipIf(!process.env.JSMART_BASE_URL || !process.env.JSMART_MODEL || !pr
 				promptTemplate: "",
 			};
 			sessionManager = new SessionManager(true, sessionFile);
-			const resourceManager = new DefaultResourceLoader({
-				noSkills: true,
-			});
 			const modelManager = ModelManager.create(undefined);
 			modelManager.addModels([
 				{
 					api: "openai-completions",
 					id: defaultModel,
 					name: defaultModel,
-					provider: "test",
+					provider: defaultProdiver,
 					baseUrl: defaultProdiverBaseUrl,
 					reasoning: true,
 					input: ["text"],
@@ -84,6 +80,7 @@ describe.skipIf(!process.env.JSMART_BASE_URL || !process.env.JSMART_MODEL || !pr
 				},
 			]);
 			const settingsManager = new SettingsManager({
+				defaultModel: { provider: defaultProdiver, model: defaultModel },
 				retry: {
 					enabled: true,
 					maxRetries: 3,
@@ -95,16 +92,7 @@ describe.skipIf(!process.env.JSMART_BASE_URL || !process.env.JSMART_MODEL || !pr
 					reserveTokens: 16384,
 				},
 			});
-			session = new AgentSession(
-				workspaces,
-				settingsManager,
-				sessionManager,
-				resourceManager,
-				modelManager,
-				defaultProdiver,
-				defaultModel,
-				agentSessionOption,
-			);
+			session = new AgentSession(workspaces, settingsManager, sessionManager, modelManager, agentSessionOption);
 
 			// Subscribe to track events
 			session.subscribe((event) => {
@@ -308,16 +296,13 @@ describe("AgentSession auto compact", () => {
 		const sessionFile = join(tempDir, "jsmart-session.jsonl");
 		const agentSessionOption = initAgentSessionOption;
 		const sessionManager = new SessionManager(true, sessionFile);
-		const resourceManager = new DefaultResourceLoader({
-			noSkills: true,
-		});
 		const modelManager = ModelManager.create(undefined);
 		modelManager.addModels([
 			{
 				api: "openai-completions",
 				id: defaultModel,
 				name: defaultModel,
-				provider: "test",
+				provider: defaultProdiver,
 				baseUrl: defaultProdiverBaseUrl,
 				reasoning: true,
 				input: ["text"],
@@ -336,16 +321,7 @@ describe("AgentSession auto compact", () => {
 				apiKey: defaultProdiverApiKey,
 			},
 		]);
-		session = new AgentSession(
-			workspaces,
-			settingsManager,
-			sessionManager,
-			resourceManager,
-			modelManager,
-			defaultProdiver,
-			defaultModel,
-			agentSessionOption,
-		);
+		session = new AgentSession(workspaces, settingsManager, sessionManager, modelManager, agentSessionOption);
 		return { session, getCallCount: () => 0 };
 	}
 
@@ -380,6 +356,7 @@ describe("AgentSession auto compact", () => {
 		const created = createSession(
 			agentSessionOption,
 			new SettingsManager({
+				defaultModel: { provider: defaultProdiver, model: defaultModel },
 				compaction: {
 					enabled: true,
 					reserveTokens: 1000,
@@ -443,6 +420,7 @@ describe("AgentSession auto compact", () => {
 		const created = createSession(
 			agentSessionOption,
 			new SettingsManager({
+				defaultModel: { provider: defaultProdiver, model: defaultModel },
 				compaction: {
 					enabled: true,
 					reserveTokens: 60,
