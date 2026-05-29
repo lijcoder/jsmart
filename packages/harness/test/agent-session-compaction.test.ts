@@ -10,6 +10,7 @@
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { type AssistantMessage, type AssistantMessageEvent, EventStream, type Usage } from "@jsmart/jsmart-ai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AgentSession, type AgentSessionEvent, type AgentSessionOptions } from "../src/agent-session.js";
 import { ModelManager } from "../src/model-manager.js";
@@ -237,3 +238,236 @@ describe.skipIf(!process.env.JSMART_BASE_URL || !process.env.JSMART_MODEL || !pr
 		}, 120000);
 	},
 );
+
+class MockAssistantStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
+	constructor() {
+		super(
+			(event) => event.type === "done" || event.type === "error",
+			(event) => {
+				if (event.type === "done") return event.message;
+				if (event.type === "error") return event.error;
+				throw new Error("Unexpected event type");
+			},
+		);
+	}
+}
+
+function createAssistantMessage(text: string, overrides?: Partial<AssistantMessage>): AssistantMessage {
+	return {
+		role: "assistant",
+		content: [{ type: "text", text }],
+		api: "test-model",
+		provider: "test",
+		model: "mock",
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason: "stop",
+		timestamp: Date.now(),
+		...overrides,
+	};
+}
+
+describe("AgentSession auto compact", () => {
+	let session: AgentSession;
+	let tempDir: string;
+	let defaultModel: string;
+	let defaultProdiver: string;
+	let defaultProdiverApiKey: string;
+	let defaultProdiverBaseUrl: string;
+
+	beforeEach(() => {
+		tempDir = join(tmpdir(), `jsmart-retry-test-${Date.now()}`);
+		mkdirSync(tempDir, { recursive: true });
+		defaultModel = process.env.JSMART_MODEL!;
+		defaultProdiver = "test";
+		defaultProdiverApiKey = process.env.JSMART_API_KEY!;
+		defaultProdiverBaseUrl = process.env.JSMART_BASE_URL!;
+	});
+
+	afterEach(() => {
+		if (session) {
+			session.dispose();
+		}
+		if (tempDir && existsSync(tempDir)) {
+			rmSync(tempDir, { recursive: true });
+		}
+	});
+
+	function createSession(
+		initAgentSessionOption: AgentSessionOptions,
+		settingsManager: SettingsManager,
+		contextWindow?: number,
+	) {
+		const workspaces = join(tempDir, "jsmart-ws");
+		const sessionFile = join(tempDir, "jsmart-session.jsonl");
+		const agentSessionOption = initAgentSessionOption;
+		const sessionManager = new SessionManager(true, sessionFile);
+		const resourceManager = new DefaultResourceLoader({
+			noSkills: true,
+		});
+		const modelManager = ModelManager.create(undefined);
+		modelManager.addModels([
+			{
+				api: "openai-completions",
+				id: defaultModel,
+				name: defaultModel,
+				provider: "test",
+				baseUrl: defaultProdiverBaseUrl,
+				reasoning: true,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: contextWindow ?? 100_000,
+				maxTokens: 4096,
+				headers: {},
+				compat: {
+					supportsDeveloperRole: false,
+				},
+			},
+		]);
+		modelManager.addProviders([
+			{
+				provider: defaultProdiver,
+				apiKey: defaultProdiverApiKey,
+			},
+		]);
+		session = new AgentSession(
+			workspaces,
+			settingsManager,
+			sessionManager,
+			resourceManager,
+			modelManager,
+			defaultProdiver,
+			defaultModel,
+			agentSessionOption,
+		);
+		return { session, getCallCount: () => 0 };
+	}
+
+	it("should trigger auto compaction via overflow error", async () => {
+		let callCount = 0;
+		const agentSessionOption: AgentSessionOptions = {
+			promptTemplate: "",
+			streamFn: () => {
+				callCount++;
+				const stream = new MockAssistantStream();
+				queueMicrotask(() => {
+					if (callCount === 5) {
+						const msg = createAssistantMessage("", {
+							stopReason: "error",
+							errorMessage: `Provider finish_reason(${callCount}): too many tokens`,
+							model: defaultModel,
+							provider: defaultProdiver,
+						});
+						stream.push({ type: "start", partial: msg });
+						stream.push({ type: "error", reason: "error", error: msg });
+					} else {
+						const s = Array(41).join(`${callCount}`);
+						const msg = createAssistantMessage(s, { model: defaultModel, provider: defaultProdiver });
+						stream.push({ type: "start", partial: msg });
+						stream.push({ type: "done", reason: "stop", message: msg });
+						return;
+					}
+				});
+				return stream;
+			},
+		};
+		const created = createSession(
+			agentSessionOption,
+			new SettingsManager({
+				compaction: {
+					enabled: true,
+					reserveTokens: 1000,
+					keepRecentTokens: 20,
+				},
+			}),
+		);
+		created.getCallCount = () => callCount;
+		const compactEvents: AgentSessionEvent[] = [];
+		const events: AgentSessionEvent[] = [];
+		created.session.subscribe((event) => {
+			events.push(event);
+			if (event.type === "compaction_start") compactEvents.push(event);
+			if (event.type === "compaction_end") compactEvents.push(event);
+		});
+
+		for (let i: number = 1; i <= 5; i++) {
+			await created.session.prompt(`test-${i}`);
+		}
+
+		// prompt共执行5次，contunue执行1，compact执行1次，continue没有userMessage事件为6，一次有userMessage的完整事件有8个
+		expect(created.getCallCount()).toBe(6);
+		expect(compactEvents.length).toBe(2);
+		expect(events.length).toBe(48);
+	}, 120000);
+
+	it("should trigger auto compaction via shoud compact", async () => {
+		let callCount = 0;
+		const agentSessionOption: AgentSessionOptions = {
+			promptTemplate: "",
+			streamFn: () => {
+				callCount++;
+				const stream = new MockAssistantStream();
+				queueMicrotask(() => {
+					if (callCount <= 5) {
+						const s = Array(41).join(`${callCount}`);
+						const totalTokens: number = callCount === 5 ? 55 : 0;
+						const usage: Usage = {
+							totalTokens: totalTokens,
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							cost: {
+								input: 0,
+								output: 0,
+								cacheRead: 0,
+								cacheWrite: 0,
+								total: 0,
+							},
+						};
+						const msg = createAssistantMessage(s, { model: defaultModel, provider: defaultProdiver, usage });
+						stream.push({ type: "start", partial: msg });
+						stream.push({ type: "done", reason: "stop", message: msg });
+						return;
+					}
+				});
+				return stream;
+			},
+		};
+		const created = createSession(
+			agentSessionOption,
+			new SettingsManager({
+				compaction: {
+					enabled: true,
+					reserveTokens: 60,
+					keepRecentTokens: 20,
+				},
+			}),
+			100,
+		);
+		created.getCallCount = () => callCount;
+		const compactEvents: AgentSessionEvent[] = [];
+		const events: AgentSessionEvent[] = [];
+		created.session.subscribe((event) => {
+			events.push(event);
+			if (event.type === "compaction_start") compactEvents.push(event);
+			if (event.type === "compaction_end") compactEvents.push(event);
+		});
+
+		for (let i: number = 1; i <= 5; i++) {
+			await created.session.prompt(`test-${i}`);
+		}
+
+		// prompt共执行5次，contunue执行1，compact执行1次，continue没有userMessage事件为6，一次有userMessage的完整事件有8个
+		console.log(`contextToken: ${created.session.getContextTokens()}`);
+		expect(created.getCallCount()).toBe(5);
+		expect(compactEvents.length).toBe(2);
+		expect(events.length).toBe(42);
+	}, 120000);
+});
