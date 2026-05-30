@@ -38,7 +38,7 @@ export class CodingSession {
 		const fsProvider = new NodeFsProvider({ cwd: projectDir });
 		const shellProvider = new NodeShellProvider({ cwd: projectDir });
 		const tools = [
-			createBashTool(shellProvider),
+			createBashTool(shellProvider, fsProvider),
 			createReadTool(fsProvider),
 			createWriteTool(fsProvider),
 			createEditTool(fsProvider),

@@ -74,7 +74,7 @@ export function createAgentSession(
 	const fsProvider = new NodeFsProvider({ cwd: workspaceDir });
 	const shellProvider = new NodeShellProvider({ cwd: workspaceDir });
 	const tools = [
-		createBashTool(shellProvider),
+		createBashTool(shellProvider, fsProvider),
 		createReadTool(fsProvider),
 		createWriteTool(fsProvider),
 		createEditTool(fsProvider),

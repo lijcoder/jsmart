@@ -1,3 +1,4 @@
+import type { TextContent } from "@jsmart/jsmart-ai";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -29,7 +30,8 @@ describe("tool node fs", () => {
 
 	it("bash tool", async () => {
 		const shellProvide = new NodeShellProvider({ cwd: tempDir });
-		const bashTool = createBashTool(shellProvide);
+		const fsProvide = new NodeFsProvider({ cwd: tempDir });
+		const bashTool = createBashTool(shellProvide, fsProvide);
 		let result = await bashTool.execute("1", { command: "pwd" });
 		console.log(result);
 		result = await bashTool.execute("1", { command: "touch bash.txt" });
@@ -42,12 +44,44 @@ describe("tool node fs", () => {
 		const shellEnvProvide = new NodeShellProvider({
 			cwd: tempDir,
 			env: {
-				PATH: "/Users/lijie/.local/programming/js/nodejs/node-v22.17.1/bin:/Users/lijie/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+				PATH: "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
 			},
 		});
-		const bashEnvTool = createBashTool(shellEnvProvide);
+		const bashEnvTool = createBashTool(shellEnvProvide, fsProvide);
 		result = await bashEnvTool.execute("1", { command: "echo $PATH" });
 		console.log(result);
+	});
+
+	it("bash tool truncation", async () => {
+		const shellProvide = new NodeShellProvider({ cwd: tempDir });
+		const fsProvide = new NodeFsProvider({ cwd: tempDir });
+		const bashTool = createBashTool(shellProvide, fsProvide);
+
+		// 生成 60KB 输出，超过 50KB 限制
+		// 每行 "line-XXXXX\n" 约 12 字节，生成 6000 行 ≈ 72KB
+		const genCmd = "awk 'BEGIN{for(i=0;i<6000;i++)printf \"line-%05d\\n\",i}'";
+
+		// 默认 tail=true，保留尾部
+		const tailResult = await bashTool.execute("1", { command: genCmd });
+		const tailText = (tailResult.content[0] as TextContent).text;
+		console.log("--- tail truncation notice ---");
+		console.log(tailText.slice(-200)); // 只打印末尾看 notice
+
+		expect(tailText).toMatch(/^\[exit 0\]/);
+		expect(tailText).toMatch(/stdout truncated.*tail/);
+		expect(tailText).toMatch(/full output:.*bash_output_/);
+		expect(tailText).toContain("line-05999"); // 尾部内容应保留
+		expect(tailText).not.toContain("line-00000"); // 头部内容应被截掉
+
+		// tail=false，保留头部
+		const headResult = await bashTool.execute("1", { command: genCmd, tail: false });
+		const headText = (headResult.content[0] as TextContent).text;
+		console.log("--- head truncation notice ---");
+		console.log(headText.slice(-200));
+
+		expect(headText).toMatch(/stdout truncated.*head/);
+		expect(headText).toContain("line-00000"); // 头部内容应保留
+		expect(headText).not.toContain("line-05999"); // 尾部内容应被截掉
 	});
 
 	it("read tool", async () => {
