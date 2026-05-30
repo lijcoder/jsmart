@@ -86,13 +86,18 @@ describe("tool node fs", () => {
 
 	it("read tool", async () => {
 		const text = "1111111111\n2222222222\n3333333333";
-		const textDiff = `1: 1111111111\n2: 2222222222\n3: 3333333333`;
 		const filePath = join(tempDir, "test.txt");
 		writeFileSync(filePath, text);
 		const readTool = createReadTool(fsProvider);
 		const result = await readTool.execute("1", { path: filePath });
-		const diff = result.content[0].type === "text" && result.content[0].text === textDiff;
-		expect(diff).toBe(true);
+		const resultText = (result.content[0] as TextContent).text;
+		console.log(result);
+		// 内容行带行号
+		expect(resultText).toContain("1: 1111111111");
+		expect(resultText).toContain("2: 2222222222");
+		expect(resultText).toContain("3: 3333333333");
+		// 末尾状态行
+		expect(resultText).toMatch(/End of file — 3 lines total\./);
 	});
 
 	it("write tool", async () => {
