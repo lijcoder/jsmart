@@ -21,7 +21,7 @@ export function createBashTool(shell: ShellProvider): AgentTool<typeof bashSchem
 			{ command, timeout }: { command: string; timeout?: number },
 			_signal?: AbortSignal,
 		) => {
-			const result = await shell.exec(command, { timeout });
+			const result = await shell.exec(command, { timeout: timeout != null ? timeout * 1000 : undefined });
 			return {
 				content: [{ type: "text", text: result.stdout }],
 				details: {
