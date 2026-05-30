@@ -95,6 +95,11 @@ export class CodingSession {
 		return this.agentSession.getContextTokens();
 	}
 
+	/** Get the system prompt */
+	getSystemPrompt(): string {
+		return this.agentSession.getSystemPrompt();
+	}
+
 	/** Get all available models */
 	getAllModels(): string[] {
 		return this.agentSession.getAllModelName();

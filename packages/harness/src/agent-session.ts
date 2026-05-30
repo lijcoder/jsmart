@@ -306,6 +306,11 @@ export class AgentSession {
 			this._emit({ type: "slash_command", name: "tokens", message: msg });
 			return true;
 		}
+		if (text === "/prompt") {
+			const msg = this.getSystemPrompt();
+			this._emit({ type: "slash_command", name: "prompt", message: msg });
+			return true;
+		}
 		return false;
 	}
 
@@ -372,6 +377,11 @@ export class AgentSession {
 	/** Get current context token count */
 	getContextTokens(): number {
 		return estimateTotalTokens(this.agent.state.messages);
+	}
+
+	/** Get the system prompt */
+	getSystemPrompt(): string {
+		return this.agent.state.systemPrompt;
 	}
 
 	/** Check if compaction is needed */

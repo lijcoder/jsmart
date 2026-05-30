@@ -83,6 +83,7 @@ async function main(): Promise<void> {
 	show("  /set model <p> <m>  - Change model");
 	show("  /compact            - Compact context");
 	show("  /tokens             - Show token count");
+	show("  /prompt             - Show system prompt");
 	show("  /session            - Show session file path");
 	show("  /sessions           - List all saved sessions");
 	show("  /multiline          - Enter multiline input mode (type /end to submit)");
@@ -253,6 +254,12 @@ async function main(): Promise<void> {
 
 		if (command === "/tokens") {
 			show(`Context tokens: ${session.getContextTokens()}`);
+			resetPrompt();
+			return;
+		}
+
+		if (command === "/prompt") {
+			show(session.getSystemPrompt());
 			resetPrompt();
 			return;
 		}
