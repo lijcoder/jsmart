@@ -131,6 +131,7 @@ describe("tool node fs", () => {
 		const result = await lsTool.execute("1", {
 			dirPath: tempDir,
 		});
+		console.log(result);
 		expect(Array.isArray(result.details)).toBe(true);
 		expect(result.details.length).toBe(1);
 	});
