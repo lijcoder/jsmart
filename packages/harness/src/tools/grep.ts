@@ -11,11 +11,11 @@ import {
 
 const grepSchema = Type.Object({
 	pattern: Type.String({ description: "Regex pattern to search for" }),
-	dirPath: Type.Optional(
-		Type.String({ description: "Root directory to search from (defaults to cwd)", default: "." }),
+	dirPath: Type.Optional(Type.String({ description: "Root directory to search from (defaults to cwd)" })),
+	fileSuffix: Type.Optional(
+		Type.String({ description: "Only search files ending with this suffix (e.g. '.ts', '.test.ts')" }),
 	),
-	glob: Type.Optional(Type.String({ description: "Only search files matching this glob suffix (e.g. '.ts')" })),
-	ignoreCase: Type.Optional(Type.Boolean({ description: "Case-insensitive matching", default: false })),
+	ignoreCase: Type.Optional(Type.Boolean({ description: "Case-insensitive matching (default false)" })),
 	offset: Type.Optional(Type.Number({ description: "1-based match number to start returning from" })),
 	limit: Type.Optional(
 		Type.Number({ description: `Maximum number of matches to return (default ${DEFAULT_MAX_LINES})` }),
@@ -30,29 +30,43 @@ export function createGrepTool(fs: FsProvider, _options?: CreateFsToolsOptions):
 		name: "grep",
 		label: "Grep",
 		description:
-			"Search file contents with a regex pattern. Searches recursively " +
-			"from the given directory, skipping node_modules and .git. " +
-			"Returns matching lines with file paths and line numbers. " +
-			"Large result sets are paginated automatically; use offset and limit to continue.",
+			"Search file contents with a regex pattern. Searches recursively from the given directory, skipping node_modules and .git. " +
+			"Returns matching lines in the format 'file:line: content'.\n\n" +
+			"Use fileSuffix to narrow the search to specific file types (e.g. '.ts'). " +
+			"After finding a match, use read with offset=<line> to view the surrounding context. " +
+			"Large result sets are paginated — use offset and limit to continue.",
 		parameters: grepSchema,
 		execute: async (
 			_toolCallId: string,
 			{
 				pattern,
 				dirPath,
-				glob,
+				fileSuffix,
 				ignoreCase,
 				offset,
 				limit,
-			}: { pattern: string; dirPath?: string; glob?: string; ignoreCase?: boolean; offset?: number; limit?: number },
-			_signal?: AbortSignal,
+			}: {
+				pattern: string;
+				dirPath?: string;
+				fileSuffix?: string;
+				ignoreCase?: boolean;
+				offset?: number;
+				limit?: number;
+			},
 		) => {
-			const useDirPath = dirPath ?? ".";
-			const fileSuffix = glob;
-			const resolved = fs.resolvePath(useDirPath);
-			const regex = new RegExp(pattern, ignoreCase ? "i" : undefined);
-			const allFiles = await help.walkFiles(fs, resolved);
+			let regex: RegExp;
+			try {
+				regex = new RegExp(pattern, ignoreCase ? "i" : undefined);
+			} catch {
+				return {
+					content: [{ type: "text", text: `Invalid regex pattern: ${pattern}` }],
+					details: [],
+				};
+			}
 
+			const useDirPath = dirPath ?? ".";
+			const resolved = fs.resolvePath(useDirPath);
+			const allFiles = await help.walkFiles(fs, resolved);
 			const files = fileSuffix ? allFiles.filter((f) => f.endsWith(fileSuffix)) : allFiles;
 
 			const matches: { file: string; line: number; content: string }[] = [];
@@ -65,14 +79,14 @@ export function createGrepTool(fs: FsProvider, _options?: CreateFsToolsOptions):
 			for (const file of files) {
 				if (help.isBinaryPath(file)) continue;
 
-				let content: string;
+				let fileContent: string;
 				try {
-					content = await fs.readFile(file);
+					fileContent = await fs.readFile(file);
 				} catch {
-					continue; // skip binary / unreadable / too-large files
+					continue;
 				}
 
-				const lines = content.split("\n");
+				const lines = fileContent.split("\n");
 				for (let i = 0; i < lines.length; i++) {
 					if (regex.test(lines[i])) {
 						matchCount += 1;
@@ -84,7 +98,7 @@ export function createGrepTool(fs: FsProvider, _options?: CreateFsToolsOptions):
 						const match = {
 							file: help.relativePath(resolved, file),
 							line: i + 1,
-							content: help.truncateLine(lines[i], maxLineLength),
+							content: help.truncateLine(lines[i].trim(), maxLineLength),
 						};
 						const matchBytes = Buffer.byteLength(JSON.stringify(match), "utf-8");
 
@@ -100,12 +114,17 @@ export function createGrepTool(fs: FsProvider, _options?: CreateFsToolsOptions):
 			}
 
 			if (start > 0 && start >= matchCount) {
-				throw new Error(
-					`The offset value ${offset} exceeds the available matches. ` +
-						`When searching for pattern "${pattern}" in directory "${resolved}", ` +
-						`only ${matchCount} match(es) were found. ` +
-						`Please use an offset between 0 and ${matchCount - 1}.`,
-				);
+				return {
+					content: [
+						{
+							type: "text",
+							text:
+								`Offset ${offset} exceeds available matches. ` +
+								`Pattern /${pattern}/ matched ${matchCount} time${matchCount === 1 ? "" : "s"} in ${resolved}.`,
+						},
+					],
+					details: [],
+				};
 			}
 
 			const fromMatch = matches.length > 0 ? start + 1 : 0;
@@ -117,18 +136,20 @@ export function createGrepTool(fs: FsProvider, _options?: CreateFsToolsOptions):
 				status = `No matches found for /${pattern}/.`;
 			} else if (truncatedByBytes) {
 				status =
-					`Output capped at ${help.formatBytes(maxOutputBytes)}. ` +
-					`Showing matches ${fromMatch}-${toMatch} of ${matchCount}. ` +
-					`Use offset=${toMatch + 1} to continue.`;
+					`Output capped at ${help.formatBytes(maxOutputBytes)}, ` +
+					`showing matches ${fromMatch}–${toMatch} of ${matchCount} — use offset=${toMatch + 1} to continue.`;
 			} else if (hasMore) {
-				status =
-					`Showing matches ${fromMatch}-${toMatch} of ${matchCount}. ` + `Use offset=${toMatch + 1} to continue.`;
+				status = `Showing matches ${fromMatch}–${toMatch} of ${matchCount} — use offset=${toMatch + 1} to continue.`;
 			} else {
 				status = `End of matches — ${matchCount} total.`;
 			}
 
+			// Format matches as standard grep output: file:line: content
+			const matchLines = matches.map((m) => `${m.file}:${m.line}: ${m.content}`);
+			const text = matchLines.length > 0 ? `${matchLines.join("\n")}\n${status}` : status;
+
 			return {
-				content: [{ type: "text", text: status }],
+				content: [{ type: "text", text }],
 				details: matches,
 			};
 		},
