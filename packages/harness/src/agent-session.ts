@@ -12,14 +12,12 @@ import {
 	prepareCompaction,
 	shouldCompact,
 } from "./compaction.js";
-import { createExecutor } from "./executor.js";
 import { convertToLlm } from "./messages.js";
 import type { ModelManager } from "./model-manager.js";
 import { buildSystemPrompt } from "./prompts.js";
 import { DefaultResourceLoader, type ResourceLoader } from "./resource-manager.js";
 import { getLatestCompactionEntry, type SessionManager } from "./session-manager.js";
 import type { SettingsManager } from "./settings-manager.js";
-import { createTools } from "./tools/index.js";
 import { sleep } from "./utils/sleep.js";
 
 export interface ResultState<T> {
@@ -117,7 +115,7 @@ export class AgentSession {
 			streamFn: options?.streamFn,
 			convertToLlm: convertToLlm,
 		});
-		const tools = options?.tools ?? createTools(createExecutor());
+		const tools = options?.tools ?? [];
 		this.agent.state.tools = tools;
 		const skills = this.resourceLoader.getSkills();
 		const systemPrompt = buildSystemPrompt({

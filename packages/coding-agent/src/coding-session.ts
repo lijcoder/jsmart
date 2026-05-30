@@ -1,9 +1,15 @@
 import {
 	AgentSession,
-	createExecutor,
-	createTools,
+	createBashTool,
+	createEditTool,
+	createGrepTool,
+	createLsTool,
+	createReadTool,
+	createWriteTool,
 	loadPromptTemplateFromDirs,
 	ModelManager,
+	NodeFsProvider,
+	NodeShellProvider,
 	SessionManager,
 	SettingsManager,
 } from "@jsmart/jsmart-harness";
@@ -29,7 +35,16 @@ export class CodingSession {
 		const sessionManager = new SessionManager(true, sessionFile);
 		const promptTemplate = loadPromptTemplateFromDirs([config.projectDirPath, config.globalDir]);
 		const customContent = loadAgentsFile(config.projectDir);
-		const tools = [...createTools(createExecutor())];
+		const fsProvider = new NodeFsProvider({ cwd: projectDir });
+		const shellProvider = new NodeShellProvider({ cwd: projectDir });
+		const tools = [
+			createBashTool(shellProvider),
+			createReadTool(fsProvider),
+			createWriteTool(fsProvider),
+			createEditTool(fsProvider),
+			createLsTool(fsProvider),
+			createGrepTool(fsProvider),
+		];
 
 		this.agentSession = new AgentSession(
 			projectDir,

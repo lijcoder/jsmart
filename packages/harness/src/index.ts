@@ -31,6 +31,8 @@ export {
 	loadPromptTemplate,
 	loadPromptTemplateFromDirs,
 } from "./prompts.js";
+export type { FsProvider, NodeFsProviderOptions, NodeShellProviderOptions, ShellProvider } from "./providers/index.js";
+export { NodeFsProvider, NodeShellProvider } from "./providers/index.js";
 export type { DefaultResourceLoaderOptions, ResourceLoader } from "./resource-manager.js";
 export { DefaultResourceLoader } from "./resource-manager.js";
 export type {
@@ -53,4 +55,11 @@ export {
 } from "./settings-manager.js";
 export type { LoadSkillsFromDirOptions, LoadSkillsResult, Skill } from "./skills.js";
 export { loadSkillsFromDir } from "./skills.js";
-export { createTools } from "./tools/index.js";
+export {
+	createBashTool,
+	createEditTool,
+	createGrepTool,
+	createLsTool,
+	createReadTool,
+	createWriteTool,
+} from "./tools/index.js";

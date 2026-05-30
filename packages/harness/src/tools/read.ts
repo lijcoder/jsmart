@@ -1,35 +1,24 @@
 import type { AgentTool } from "@jsmart/jsmart-agent-core";
-import type { ImageContent, TextContent } from "@jsmart/jsmart-ai";
 import { Type } from "@sinclair/typebox";
-import type { Executor } from "../executor.js";
-import { DEFAULT_MAX_BYTES, type TruncationResult, truncateHead } from "./truncate.js";
-
-interface ReadToolDetails {
-	truncation?: TruncationResult;
-}
+import type { FsProvider } from "../providers/types.js";
+import * as help from "./help.js";
+import {
+	type CreateFsToolsOptions,
+	DEFAULT_MAX_LINE_LENGTH,
+	DEFAULT_MAX_LINES,
+	DEFAULT_MAX_OUTPUT_BYTES,
+} from "./help.js";
 
 const readToolSchema = Type.Object({
-	label: Type.String({ description: "Brief description of what you're reading and why (shown to user)" }),
 	path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
 	offset: Type.Optional(Type.Number({ description: "Line number to start reading from (1-indexed)" })),
 	limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
 });
 
-function shellEscape(s: string): string {
-	return `'${s.replace(/'/g, "'\\''")}'`;
-}
-
-function formatSize(bytes: number): string {
-	if (bytes < 1024) {
-		return `${bytes}B`;
-	} else if (bytes < 1024 * 1024) {
-		return `${(bytes / 1024).toFixed(1)}KB`;
-	} else {
-		return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-	}
-}
-
-export function createReadTool(executor: Executor): AgentTool<typeof readToolSchema> {
+export function createReadTool(fs: FsProvider, options?: CreateFsToolsOptions): AgentTool<typeof readToolSchema> {
+	const maxOutputBytes = options?.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
+	const maxLines = options?.maxLines ?? DEFAULT_MAX_LINES;
+	const maxLineLength = options?.maxLineLength ?? DEFAULT_MAX_LINE_LENGTH;
 	return {
 		name: "read",
 		label: "Read",
@@ -38,93 +27,84 @@ export function createReadTool(executor: Executor): AgentTool<typeof readToolSch
 		parameters: readToolSchema,
 		execute: async (
 			_toolCallId: string,
-			{ path, offset, limit }: { label: string; path: string; offset?: number; limit?: number },
-			signal?: AbortSignal,
-		): Promise<{ content: (TextContent | ImageContent)[]; details: ReadToolDetails | undefined }> => {
-			// Get total line count first
-			const countResult = await executor.exec(`wc -l < ${shellEscape(path)}`, { signal });
-			if (countResult.code !== 0) {
-				throw new Error(countResult.stderr || `Failed to read file: ${path}`);
-			}
-			const totalFileLines = Number.parseInt(countResult.stdout.trim(), 10) + 1; // wc -l counts newlines, not lines
+			{ path, offset, limit }: { path: string; offset?: number; limit?: number },
+			_signal?: AbortSignal,
+		) => {
+			const resolved = fs.resolvePath(path);
 
-			// Apply offset if specified (1-indexed)
-			const startLine = offset ? Math.max(1, offset) : 1;
-			const startLineDisplay = startLine;
-
-			// Check if offset is out of bounds
-			if (startLine > totalFileLines) {
-				throw new Error(`Offset ${offset} is beyond end of file (${totalFileLines} lines total)`);
+			// Binary check by extension
+			if (help.isBinaryPath(resolved)) {
+				throw new Error(`Cannot read binary file: ${resolved}`);
 			}
 
-			// Read content with offset
-			let cmd: string;
-			if (startLine === 1) {
-				cmd = `cat ${shellEscape(path)}`;
-			} else {
-				cmd = `tail -n +${startLine} ${shellEscape(path)}`;
-			}
-
-			const result = await executor.exec(cmd, { signal });
-			if (result.code !== 0) {
-				throw new Error(result.stderr || `Failed to read file: ${path}`);
-			}
-
-			let selectedContent = result.stdout;
-			let userLimitedLines: number | undefined;
-
-			// Apply user limit if specified
-			if (limit !== undefined) {
-				const lines = selectedContent.split("\n");
-				const endLine = Math.min(limit, lines.length);
-				selectedContent = lines.slice(0, endLine).join("\n");
-				userLimitedLines = endLine;
-			}
-
-			// Apply truncation (respects both line and byte limits)
-			const truncation = truncateHead(selectedContent);
-
-			let outputText: string;
-			let details: ReadToolDetails | undefined;
-
-			if (truncation.firstLineExceedsLimit) {
-				// First line at offset exceeds 50KB - tell model to use bash
-				const firstLineSize = formatSize(Buffer.byteLength(selectedContent.split("\n")[0], "utf-8"));
-				outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: sed -n '${startLineDisplay}p' ${path} | head -c ${DEFAULT_MAX_BYTES}]`;
-				details = { truncation };
-			} else if (truncation.truncated) {
-				// Truncation occurred - build actionable notice
-				const endLineDisplay = startLineDisplay + truncation.outputLines - 1;
-				const nextOffset = endLineDisplay + 1;
-
-				outputText = truncation.content;
-
-				if (truncation.truncatedBy === "lines") {
-					outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines}. Use offset=${nextOffset} to continue]`;
-				} else {
-					outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue]`;
+			let content: string;
+			try {
+				content = await fs.readFile(resolved);
+			} catch (error: unknown) {
+				if (error && typeof error === "object" && "name" in error && error.name === "FileTooLargeError") {
+					throw new Error((error as Error).message);
 				}
-				details = { truncation };
-			} else if (userLimitedLines !== undefined) {
-				// User specified limit, check if there's more content
-				const linesFromStart = startLine - 1 + userLimitedLines;
-				if (linesFromStart < totalFileLines) {
-					const remaining = totalFileLines - linesFromStart;
-					const nextOffset = startLine + userLimitedLines;
+				throw error;
+			}
 
-					outputText = truncation.content;
-					outputText += `\n\n[${remaining} more lines in file. Use offset=${nextOffset} to continue]`;
-				} else {
-					outputText = truncation.content;
+			const allLines = content.split("\n");
+			const totalLines = allLines.length;
+			const lineLimit = limit ?? maxLines;
+			const start = (offset ?? 1) - 1; // convert 1-based to 0-based
+
+			if (start > 0 && start >= totalLines) {
+				throw new Error(`Offset ${offset} is out of range (file has ${totalLines} lines)`);
+			}
+
+			const end = Math.min(start + lineLimit, totalLines);
+			const slice = allLines.slice(start, end);
+
+			// Truncate long lines and cap total bytes
+			let totalBytes = 0;
+			let truncatedByBytes = false;
+			const outputLines: string[] = [];
+
+			for (let i = 0; i < slice.length; i++) {
+				let line = slice[i];
+				if (line.length > maxLineLength) {
+					line = `${line.slice(0, maxLineLength)}... (line truncated at ${maxLineLength} chars)`;
 				}
+
+				const lineBytes = Buffer.byteLength(line, "utf-8");
+				if (totalBytes + lineBytes > maxOutputBytes) {
+					truncatedByBytes = true;
+					break;
+				}
+
+				totalBytes += lineBytes;
+				outputLines.push(`${start + i + 1}: ${line}`);
+			}
+
+			const lastLine = start + outputLines.length;
+			const hasMore = lastLine < totalLines;
+
+			let status: string;
+			if (truncatedByBytes) {
+				status =
+					`Output capped at ${help.formatBytes(maxOutputBytes)}. ` +
+					`Showing lines ${start + 1}-${lastLine} of ${totalLines}. ` +
+					`Use offset=${lastLine + 1} to continue.`;
+			} else if (hasMore) {
+				status =
+					`Showing lines ${start + 1}-${lastLine} of ${totalLines}. ` + `Use offset=${lastLine + 1} to continue.`;
 			} else {
-				// No truncation, no user limit exceeded
-				outputText = truncation.content;
+				status = `End of file — ${totalLines} lines total.`;
 			}
 
 			return {
-				content: [{ type: "text", text: outputText }],
-				details,
+				content: [{ type: "text", text: outputLines.join("\n") }],
+				details: {
+					filePath: resolved,
+					totalLines,
+					fromLine: start + 1,
+					toLine: lastLine,
+					status,
+				},
 			};
 		},
 	};

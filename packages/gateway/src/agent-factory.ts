@@ -1,9 +1,15 @@
 import {
 	AgentSession,
-	createExecutor,
-	createTools,
+	createBashTool,
+	createEditTool,
+	createGrepTool,
+	createLsTool,
+	createReadTool,
+	createWriteTool,
 	loadPromptTemplate,
 	type ModelManager,
+	NodeFsProvider,
+	NodeShellProvider,
 	SessionManager,
 	SettingsManager,
 } from "@jsmart/jsmart-harness";
@@ -65,7 +71,17 @@ export function createAgentSession(
 		skillPaths: [...(globalAgentSettings.skillPaths ?? []), ...(templateAgentSettings.skillPaths ?? [])],
 	};
 
-	const tools = [...createTools(createExecutor()), ...createGatewayTools()];
+	const fsProvider = new NodeFsProvider({ cwd: workspaceDir });
+	const shellProvider = new NodeShellProvider({ cwd: workspaceDir });
+	const tools = [
+		createBashTool(shellProvider),
+		createReadTool(fsProvider),
+		createWriteTool(fsProvider),
+		createEditTool(fsProvider),
+		createLsTool(fsProvider),
+		createGrepTool(fsProvider),
+		...createGatewayTools(),
+	];
 
 	const session = new AgentSession(
 		workspaceDir,
