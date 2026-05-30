@@ -4,7 +4,7 @@ import type { FsProvider } from "../providers/types.js";
 import * as help from "./help.js";
 import { type CreateFsToolsOptions, DEFAULT_MAX_OUTPUT_BYTES } from "./help.js";
 
-const editSchema = Type.Object({
+const lsSchema = Type.Object({
 	dirPath: Type.String({ description: "Directory path to list (defaults to cwd)" }),
 	offset: Type.Optional(Type.Number({ description: "1-based entry number to start listing from" })),
 	limit: Type.Optional(
@@ -14,12 +14,12 @@ const editSchema = Type.Object({
 
 const DEFAULT_LIMIT = 100;
 
-export function createLsTool(fs: FsProvider, _options?: CreateFsToolsOptions): AgentTool<typeof editSchema> {
+export function createLsTool(fs: FsProvider, _options?: CreateFsToolsOptions): AgentTool<typeof lsSchema> {
 	return {
 		name: "ls",
 		label: "ls",
 		description: `List directory contents. Returns entries sorted alphabetically, with '/' suffix for directories. Includes dotfiles. Output is truncated to ${DEFAULT_LIMIT} entries (whichever is hit first).`,
-		parameters: editSchema,
+		parameters: lsSchema,
 		execute: async (
 			_toolCallId: string,
 			{ dirPath, offset, limit }: { dirPath: string; offset?: number; limit?: number },
