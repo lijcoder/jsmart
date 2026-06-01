@@ -33,9 +33,7 @@
 		"node": ">=20.0.0"
 	},
 	"dependencies": {
-		"@jsmart/jsmart-agent-core": "^0.0.1",
-		"@jsmart/jsmart-ai": "^0.0.1",
-		"@sinclair/typebox": "^0.34.30"
+		"@jsmart/jsmart-ai": "^0.0.1"
 	},
 	"devDependencies": {
 		"@types/node": "^24.3.0",

@@ -1,9 +1,11 @@
+import type { Message } from "@jsmart/jsmart-ai";
 import {
 	AgentSession,
 	createBashTool,
 	createEditTool,
 	createGrepTool,
 	createLsTool,
+	createMemorySearchTool,
 	createReadTool,
 	createWriteTool,
 	loadPromptTemplateFromDirs,
@@ -65,8 +67,8 @@ export class CodingSession {
 			createEditTool(fsProvider),
 			createLsTool(fsProvider),
 			createGrepTool(fsProvider),
-			// Memory search tool (read-only; writes happen in the background)
-			...memoryManager.getTools(),
+			// Memory search tool (read-only; writes happen in the background via hooks)
+			createMemorySearchTool(memoryManager),
 		];
 
 		this.agentSession = new AgentSession(projectDir, settingsManager, sessionManager, modelManager, {
@@ -78,12 +80,14 @@ export class CodingSession {
 		// Background memory extraction hooks
 		this.agentSession.subscribe((event) => {
 			if (event.type === "agent_end") {
-				// Count turns; trigger LLM extraction every N turns
-				memoryManager.onTurnEnd(event.messages);
+				// Count turns; trigger LLM extraction every N turns.
+				// Filter to standard AI messages — agent may carry custom message types
+				// (e.g. CompactionSummaryMessage) that the memory package doesn't know about.
+				memoryManager.onTurnEnd(toAiMessages(event.messages));
 			}
 			if (event.type === "compaction_start") {
 				// Always extract before compaction to avoid losing context
-				memoryManager.onBeforeCompaction(this.agentSession.messages);
+				memoryManager.onBeforeCompaction(toAiMessages(this.agentSession.messages));
 			}
 		});
 	}
@@ -153,6 +157,15 @@ export class CodingSession {
 	messageCount(): number {
 		return this.agentSession.messageCount();
 	}
+}
+
+/**
+ * Filters an AgentMessage array down to standard AI Message types.
+ * The agent runtime may attach custom message types (e.g. CompactionSummaryMessage)
+ * that framework-agnostic packages like jsmart-memory don't know about.
+ */
+function toAiMessages(messages: { role?: string }[]): Message[] {
+	return messages.filter((m): m is Message => m.role === "user" || m.role === "assistant" || m.role === "toolResult");
 }
 
 /** Load AGENTS.md from the given directory, returning its content or null */

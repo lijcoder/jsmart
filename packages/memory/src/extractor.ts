@@ -1,5 +1,4 @@
-import type { AgentMessage } from "@jsmart/jsmart-agent-core";
-import type { Api, Model } from "@jsmart/jsmart-ai";
+import type { Api, Message, Model } from "@jsmart/jsmart-ai";
 import { completeSimple } from "@jsmart/jsmart-ai";
 import type { MemoryStore } from "./store.js";
 import type { Memory, MemoryOperation } from "./types.js";
@@ -36,9 +35,7 @@ Example output:
   { "op": "skip" }
 ]`;
 
-function extractText(msg: AgentMessage): string | null {
-	if (!("role" in msg)) return null;
-
+function extractText(msg: Message): string | null {
 	if (msg.role === "user") {
 		// content may be a plain string or an array
 		if (typeof msg.content === "string") return msg.content.trim() || null;
@@ -64,10 +61,9 @@ function extractText(msg: AgentMessage): string | null {
 	return null;
 }
 
-function formatMessagesForExtraction(messages: AgentMessage[]): string {
+function formatMessagesForExtraction(messages: Message[]): string {
 	const parts: string[] = [];
 	for (const msg of messages) {
-		if (!("role" in msg)) continue;
 		const text = extractText(msg);
 		if (!text) continue;
 		const prefix = msg.role === "user" ? "User" : "Assistant";
@@ -108,7 +104,7 @@ export class MemoryExtractor {
 	 * Extracts memories from the given messages and applies the resulting operations.
 	 * Only user/assistant text is considered; tool calls and thinking blocks are ignored.
 	 */
-	async extract(newMessages: AgentMessage[]): Promise<void> {
+	async extract(newMessages: Message[]): Promise<void> {
 		const conversationText = formatMessagesForExtraction(newMessages);
 		if (!conversationText.trim()) return;
 

@@ -1,10 +1,9 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgentMessage, AgentTool } from "@jsmart/jsmart-agent-core";
+import type { Message } from "@jsmart/jsmart-ai";
 import { MemoryExtractor } from "./extractor.js";
 import { MemoryLoader } from "./loader.js";
 import { MemoryStore } from "./store.js";
-import { createMemoryTools } from "./tools.js";
 import type { Memory, MemoryManagerOptions, MemoryState } from "./types.js";
 
 const DEFAULT_EXTRACTION_INTERVAL = 5;
@@ -14,6 +13,10 @@ const EMPTY_STATE: MemoryState = { lastExtractedMessageIndex: 0, lastExtractedAt
 /**
  * Orchestrates persistent memory for an agent session.
  *
+ * This class only depends on `@jsmart/jsmart-ai` — it is not coupled to any
+ * agent framework. Upper layers (e.g. harness, coding-agent) are responsible
+ * for wiring the hooks and creating framework-specific tools.
+ *
  * Usage:
  * ```ts
  * const mem = new MemoryManager({ memoryDir, extractionModel });
@@ -22,14 +25,14 @@ const EMPTY_STATE: MemoryState = { lastExtractedMessageIndex: 0, lastExtractedAt
  * // Inject into system prompt at session start
  * const memBlock = mem.formatForPrompt(); // null if no memories yet
  *
- * // Add the read-only search tool
- * const tools = [...existingTools, ...mem.getTools()];
- *
- * // Hook into session events
+ * // Hook into session events (framework-specific wiring lives in upper layer)
  * session.subscribe((event) => {
- *   if (event.type === "agent_end")       mem.onTurnEnd(event.messages);
+ *   if (event.type === "agent_end")        mem.onTurnEnd(event.messages);
  *   if (event.type === "compaction_start") mem.onBeforeCompaction(session.messages);
  * });
+ *
+ * // Search is exposed for upper layers to build tools on top of
+ * mem.search("user preferences");
  * ```
  */
 export class MemoryManager {
@@ -66,10 +69,12 @@ export class MemoryManager {
 	}
 
 	/**
-	 * Call after each agent turn (subscribe to `agent_end` event).
+	 * Call after each agent turn ends.
 	 * Triggers background extraction every `extractionInterval` turns.
+	 *
+	 * @param allMessages - Full message history at turn end (e.g. from `agent_end` event)
 	 */
-	onTurnEnd(allMessages: AgentMessage[]): void {
+	onTurnEnd(allMessages: Message[]): void {
 		this.turnCount++;
 		if (this.turnCount % this.extractionInterval === 0) {
 			this._triggerExtraction(allMessages);
@@ -77,17 +82,19 @@ export class MemoryManager {
 	}
 
 	/**
-	 * Call before context compaction (subscribe to `compaction_start` event).
+	 * Call before context compaction.
 	 * Extracts memories from new messages so they are not lost during compaction.
 	 * Only processes messages since the last extraction — no double-processing.
+	 *
+	 * @param allMessages - Full message history at the moment compaction is triggered
 	 */
-	onBeforeCompaction(allMessages: AgentMessage[]): void {
+	onBeforeCompaction(allMessages: Message[]): void {
 		this._triggerExtraction(allMessages);
 	}
 
 	/**
 	 * Keyword search across all memories (name, description, content).
-	 * Case-insensitive.
+	 * Case-insensitive. Use this to build framework-specific tool wrappers.
 	 */
 	search(query: string): Memory[] {
 		const q = query.toLowerCase();
@@ -98,14 +105,9 @@ export class MemoryManager {
 			);
 	}
 
-	/** Returns the read-only agent tools (memory_search only). */
-	getTools(): AgentTool<any>[] {
-		return createMemoryTools(this);
-	}
-
 	// ── private ────────────────────────────────────────────────────────────────
 
-	private _triggerExtraction(allMessages: AgentMessage[]): void {
+	private _triggerExtraction(allMessages: Message[]): void {
 		if (!this.extractor) return;
 
 		const newMessages = allMessages.slice(this.state.lastExtractedMessageIndex);

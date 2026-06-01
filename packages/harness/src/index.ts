@@ -60,6 +60,7 @@ export {
 	createEditTool,
 	createGrepTool,
 	createLsTool,
+	createMemorySearchTool,
 	createReadTool,
 	createWriteTool,
 } from "./tools/index.js";
