@@ -50,7 +50,7 @@ export class MemoryManager {
 		this.loader = new MemoryLoader(this.store);
 		this.extractionInterval = options.extractionInterval ?? DEFAULT_EXTRACTION_INTERVAL;
 		if (options.extractionModel) {
-			this.extractor = new MemoryExtractor(this.store, options.extractionModel);
+			this.extractor = new MemoryExtractor(this.store, options.extractionModel, options.extractionApiKey);
 		}
 		this.state = this._loadState();
 	}

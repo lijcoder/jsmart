@@ -98,6 +98,7 @@ export class MemoryExtractor {
 	constructor(
 		private store: MemoryStore,
 		private model: Model<Api>,
+		private apiKey?: string,
 	) {}
 
 	/**
@@ -134,7 +135,7 @@ export class MemoryExtractor {
 					},
 				],
 			},
-			{ maxTokens: 2048 },
+			{ maxTokens: 2048, apiKey: this.apiKey },
 		);
 
 		if (response.stopReason === "error") {

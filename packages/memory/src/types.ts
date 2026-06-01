@@ -40,6 +40,11 @@ export interface MemoryManagerOptions {
 	 */
 	extractionModel?: Model<Api>;
 	/**
+	 * API key for the extraction model's provider.
+	 * If omitted, the provider's default key resolution is used.
+	 */
+	extractionApiKey?: string;
+	/**
 	 * Number of turns between automatic extraction runs.
 	 * @default 5
 	 */
