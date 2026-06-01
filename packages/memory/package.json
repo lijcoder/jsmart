@@ -1,13 +1,10 @@
 {
-	"name": "@jsmart/jsmart-coding-agent",
+	"name": "@jsmart/jsmart-memory",
 	"version": "0.0.1",
-	"description": "Interactive coding agent CLI with session management",
+	"description": "Persistent memory system for jsmart agents",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"bin": {
-		"jsmart-coding": "./dist/cli.js"
-	},
 	"files": [
 		"dist",
 		"README.md"
@@ -16,22 +13,21 @@
 		"clean": "shx rm -rf dist",
 		"build": "tsgo -p tsconfig.build.json",
 		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
-		"start": "node dist/cli.js",
 		"test": "vitest --run",
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"keywords": [
 		"ai",
 		"agent",
-		"coding",
-		"cli"
+		"memory",
+		"llm"
 	],
 	"author": "Jie",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/openclaw-dev/jsmart-mono.git",
-		"directory": "packages/coding-agent"
+		"directory": "packages/memory"
 	},
 	"engines": {
 		"node": ">=20.0.0"
@@ -39,10 +35,7 @@
 	"dependencies": {
 		"@jsmart/jsmart-agent-core": "^0.0.1",
 		"@jsmart/jsmart-ai": "^0.0.1",
-		"@jsmart/jsmart-harness": "^0.0.1",
-		"@jsmart/jsmart-memory": "^0.0.1",
-		"@sinclair/typebox": "^0.34.30",
-		"ajv": "^8.17.1"
+		"@sinclair/typebox": "^0.34.30"
 	},
 	"devDependencies": {
 		"@types/node": "^24.3.0",

@@ -13,6 +13,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@jsmart/jsmart-harness";
+import { MemoryManager } from "@jsmart/jsmart-memory";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import type { ResolvedConfig } from "./config.js";
@@ -31,12 +32,32 @@ export class CodingSession {
 		// Generate session file path (use sessionId to resume if provided)
 		const sessionFile = generateSessionFilePath(config.sessionsDir, projectDir, config.sessionId);
 
+		// Create managers (settingsManager extracted so we can read the default model for memory extraction)
+		const settingsManager = new SettingsManager({ ...config.settings, skillPaths: config.skillPaths });
 		const modelManager = new ModelManager(config.modelFile);
 		const sessionManager = new SessionManager(true, sessionFile);
 		const promptTemplate = loadPromptTemplateFromDirs([config.projectDirPath, config.globalDir]);
-		const customContent = loadAgentsFile(config.projectDir);
 		const fsProvider = new NodeFsProvider({ cwd: projectDir });
 		const shellProvider = new NodeShellProvider({ cwd: projectDir });
+
+		// Set up memory manager (project-scoped, stored under .jsmart/memory/)
+		const defaultModelSettings = settingsManager.getDefaultModel();
+		const extractionModel = defaultModelSettings
+			? modelManager.find(defaultModelSettings.provider, defaultModelSettings.model)
+			: modelManager.getAll()[0]; // fallback to first available model
+
+		const memoryManager = new MemoryManager({
+			memoryDir: join(config.projectDirPath, "memory"),
+			extractionModel,
+			extractionInterval: 5,
+		});
+		memoryManager.ensureDir();
+
+		// Combine AGENTS.md with the memory index for system prompt injection
+		const agentsContent = loadAgentsFile(config.projectDir);
+		const memoryContent = memoryManager.formatForPrompt();
+		const customContent = [agentsContent, memoryContent].filter(Boolean).join("\n\n---\n\n") || undefined;
+
 		const tools = [
 			createBashTool(shellProvider, fsProvider),
 			createReadTool(fsProvider),
@@ -44,19 +65,27 @@ export class CodingSession {
 			createEditTool(fsProvider),
 			createLsTool(fsProvider),
 			createGrepTool(fsProvider),
+			// Memory search tool (read-only; writes happen in the background)
+			...memoryManager.getTools(),
 		];
 
-		this.agentSession = new AgentSession(
-			projectDir,
-			new SettingsManager({ ...config.settings, skillPaths: config.skillPaths }),
-			sessionManager,
-			modelManager,
-			{
-				promptTemplate: promptTemplate ?? undefined,
-				customContent: customContent ?? undefined,
-				tools: tools,
-			},
-		);
+		this.agentSession = new AgentSession(projectDir, settingsManager, sessionManager, modelManager, {
+			promptTemplate: promptTemplate ?? undefined,
+			customContent: customContent,
+			tools: tools,
+		});
+
+		// Background memory extraction hooks
+		this.agentSession.subscribe((event) => {
+			if (event.type === "agent_end") {
+				// Count turns; trigger LLM extraction every N turns
+				memoryManager.onTurnEnd(event.messages);
+			}
+			if (event.type === "compaction_start") {
+				// Always extract before compaction to avoid losing context
+				memoryManager.onBeforeCompaction(this.agentSession.messages);
+			}
+		});
 	}
 
 	/** Subscribe to agent events */
