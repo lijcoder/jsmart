@@ -40,7 +40,7 @@ import { MemoryManager } from "@jsmart/jsmart-memory";
 const memoryManager = new MemoryManager({
   memoryDir: ".jsmart/memory",
   extractionModel: myModel,      // dedicated model for extraction (e.g. haiku)
-  extractionInterval: 5,         // extract every 5 turns (default)
+  extractionApiKey: myApiKey,    // API key for the extraction model's provider
 });
 memoryManager.ensureDir();
 
@@ -50,19 +50,11 @@ const memoryContent = memoryManager.formatForPrompt(); // null if no memories ye
 const customContent = [agentsContent, memoryContent].filter(Boolean).join("\n\n---\n\n");
 
 // 2. Give the agent the read-only search tool
-const tools = [...existingTools, ...memoryManager.getTools()];
+import { createMemorySearchTool } from "@jsmart/jsmart-harness";
+const tools = [...existingTools, createMemorySearchTool(memoryManager)];
 
-// 3. Hook into session events for background extraction
-session.subscribe((event) => {
-  if (event.type === "agent_end") {
-    // Count turns; extract every N turns
-    memoryManager.onTurnEnd(event.messages);
-  }
-  if (event.type === "compaction_start") {
-    // Always extract before compaction to avoid losing information
-    memoryManager.onBeforeCompaction(session.messages);
-  }
-});
+// 3. Trigger extraction (upper layer controls timing/interval)
+memoryManager.generalMemory(recentMessages);
 ```
 
 ## Memory File Format

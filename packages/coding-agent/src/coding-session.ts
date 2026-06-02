@@ -1,3 +1,4 @@
+import type { AgentMessage, AgentTool } from "@jsmart/jsmart-agent-core";
 import type { Message } from "@jsmart/jsmart-ai";
 import {
 	AgentSession,
@@ -29,6 +30,11 @@ export interface ResultState<T> {
 
 export class CodingSession {
 	private agentSession: AgentSession;
+	// memory
+	private memoryManager?: MemoryManager;
+	private readonly memoryCount: number = 5;
+	private memoryTurnCount: number = 0;
+	private memoryAgentMessages: AgentMessage[] = [];
 
 	constructor(projectDir: string, config: ResolvedConfig) {
 		// Generate session file path (use sessionId to resume if provided)
@@ -45,31 +51,36 @@ export class CodingSession {
 		// Set up memory manager (project-scoped, stored under .jsmart/memory/)
 		const defaultModelSettings = settingsManager.getDefaultModel();
 		const extractionModel = defaultModelSettings
-			? modelManager.find(defaultModelSettings.provider, defaultModelSettings.model)
-			: modelManager.getAll()[0]; // fallback to first available model
-
-		const memoryManager = new MemoryManager({
-			memoryDir: join(config.projectDirPath, "memory"),
-			extractionModel,
-			extractionInterval: 5,
-		});
-		memoryManager.ensureDir();
+			? (modelManager.find(defaultModelSettings.provider, defaultModelSettings.model) ?? undefined)
+			: undefined;
+		const extractionApiKey = extractionModel
+			? (modelManager.getApiKeyForProviderSync(extractionModel.provider) ?? "")
+			: "";
+		if (extractionModel !== undefined) {
+			this.memoryManager = new MemoryManager({
+				memoryDir: join(config.projectDirPath, "memory"),
+				extractionModel,
+				extractionApiKey,
+			});
+			this.memoryManager.ensureDir();
+		}
 
 		// Combine AGENTS.md with the memory index for system prompt injection
 		const agentsContent = loadAgentsFile(config.projectDir);
-		const memoryContent = memoryManager.formatForPrompt();
+		const memoryContent = this.memoryManager?.formatForPrompt();
 		const customContent = [agentsContent, memoryContent].filter(Boolean).join("\n\n---\n\n") || undefined;
 
-		const tools = [
+		const tools: AgentTool<any>[] = [
 			createBashTool(shellProvider, fsProvider),
 			createReadTool(fsProvider),
 			createWriteTool(fsProvider),
 			createEditTool(fsProvider),
 			createLsTool(fsProvider),
 			createGrepTool(fsProvider),
-			// Memory search tool (read-only; writes happen in the background via hooks)
-			createMemorySearchTool(memoryManager),
 		];
+		if (this.memoryManager) {
+			tools.push(createMemorySearchTool(this.memoryManager));
+		}
 
 		this.agentSession = new AgentSession(projectDir, settingsManager, sessionManager, modelManager, {
 			promptTemplate: promptTemplate ?? undefined,
@@ -80,14 +91,17 @@ export class CodingSession {
 		// Background memory extraction hooks
 		this.agentSession.subscribe((event) => {
 			if (event.type === "agent_end") {
-				// Count turns; trigger LLM extraction every N turns.
-				// Filter to standard AI messages — agent may carry custom message types
-				// (e.g. CompactionSummaryMessage) that the memory package doesn't know about.
-				memoryManager.onTurnEnd(toAiMessages(event.messages));
-			}
-			if (event.type === "compaction_start") {
-				// Always extract before compaction to avoid losing context
-				memoryManager.onBeforeCompaction(toAiMessages(this.agentSession.messages));
+				if (this.memoryManager) {
+					// Count turns; trigger LLM extraction every N turns.
+					// Filter to standard AI messages — agent may carry custom message types
+					++this.memoryTurnCount;
+					this.memoryAgentMessages.push(...event.messages);
+					if (this.memoryTurnCount >= this.memoryCount) {
+						this.memoryManager?.generalMemory(toAiMessages(this.memoryAgentMessages));
+						this.memoryTurnCount = 0;
+						this.memoryAgentMessages = [];
+					}
+				}
 			}
 		});
 	}

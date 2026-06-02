@@ -77,12 +77,45 @@ function formatExistingMemories(memories: Memory[]): string {
 	return memories.map((m) => `### ${m.name}\n_${m.description}_\n\n${m.content}`).join("\n\n---\n\n");
 }
 
+function extractFirstJsonArray(text: string): string | null {
+	// Walk character-by-character to find the first complete [...] balanced block.
+	// A greedy regex like /\[[\s\S]*\]/ would match from the first '[' all the way to
+	// the *last* ']' in the string, causing JSON.parse to fail whenever the LLM appends
+	// Markdown links or explanatory text after the JSON array.
+	const start = text.indexOf("[");
+	if (start === -1) return null;
+	let depth = 0;
+	let inString = false;
+	let escaped = false;
+	for (let i = start; i < text.length; i++) {
+		const ch = text[i];
+		if (escaped) {
+			escaped = false;
+			continue;
+		}
+		if (ch === "\\" && inString) {
+			escaped = true;
+			continue;
+		}
+		if (ch === '"') {
+			inString = !inString;
+			continue;
+		}
+		if (inString) continue;
+		if (ch === "[") depth++;
+		else if (ch === "]") {
+			depth--;
+			if (depth === 0) return text.slice(start, i + 1);
+		}
+	}
+	return null;
+}
+
 function parseOperations(responseText: string): MemoryOperation[] {
-	// Extract the first JSON array from the response
-	const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-	if (!jsonMatch) return [];
+	const jsonArray = extractFirstJsonArray(responseText);
+	if (!jsonArray) return [];
 	try {
-		const parsed = JSON.parse(jsonMatch[0]);
+		const parsed = JSON.parse(jsonArray);
 		if (!Array.isArray(parsed)) return [];
 		return parsed.filter(
 			(op): op is MemoryOperation =>

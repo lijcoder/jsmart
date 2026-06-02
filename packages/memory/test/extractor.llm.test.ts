@@ -104,7 +104,7 @@ describe.skipIf(!process.env.JSMART_BASE_URL || !process.env.JSMART_MODEL || !pr
 			// The extracted content should reference TypeScript or Chinese
 			const allContent = memories.map((m) => m.content.toLowerCase()).join(" ");
 			const allDesc = memories.map((m) => m.description.toLowerCase()).join(" ");
-			const combined = allContent + " " + allDesc;
+			const combined = `${allContent}·${allDesc}`;
 			expect(combined.includes("typescript") || combined.includes("chinese") || combined.includes("中文")).toBe(
 				true,
 			);

@@ -38,22 +38,10 @@ export interface MemoryManagerOptions {
 	 * Model used for background extraction. If omitted, automatic extraction is disabled.
 	 * Tip: use a small/fast model (e.g. haiku) to reduce cost.
 	 */
-	extractionModel?: Model<Api>;
+	extractionModel: Model<Api>;
 	/**
 	 * API key for the extraction model's provider.
 	 * If omitted, the provider's default key resolution is used.
 	 */
-	extractionApiKey?: string;
-	/**
-	 * Number of turns between automatic extraction runs.
-	 * @default 5
-	 */
-	extractionInterval?: number;
-}
-
-/** Persisted extraction state, saved to .state.json inside memoryDir. */
-export interface MemoryState {
-	/** Index into the all-messages array at the time of the last successful extraction. */
-	lastExtractedMessageIndex: number;
-	lastExtractedAt: string; // ISO 8601, empty string if never extracted
+	extractionApiKey: string;
 }

@@ -130,7 +130,10 @@ export class MemoryStore {
 		const existing = existsSync(indexFile) ? readFileSync(indexFile, "utf-8") : "# Memory Index\n";
 		const newLine = `- [${name}](${name}.md) — ${description}`;
 		const lines = existing.split("\n");
-		const idx = lines.findIndex((l) => l.includes(`[${name}](`));
+		// Anchor to the exact entry prefix to avoid false matches when another
+		// memory's description happens to contain '[name](' as a Markdown link.
+		const entryPrefix = `- [${name}](${name}.md)`;
+		const idx = lines.findIndex((l) => l.startsWith(entryPrefix));
 		if (idx >= 0) {
 			lines[idx] = newLine;
 		} else {
@@ -144,9 +147,12 @@ export class MemoryStore {
 	private _removeFromIndex(name: string): void {
 		const indexFile = join(this.dir, INDEX_FILENAME);
 		if (!existsSync(indexFile)) return;
+		// Use the exact entry prefix so that other entries whose description
+		// contains '[name](' as a Markdown link are not accidentally removed.
+		const entryPrefix = `- [${name}](${name}.md)`;
 		const lines = readFileSync(indexFile, "utf-8")
 			.split("\n")
-			.filter((l) => !l.includes(`[${name}](`));
+			.filter((l) => !l.startsWith(entryPrefix));
 		writeFileSync(indexFile, lines.join("\n"), "utf-8");
 	}
 }

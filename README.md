@@ -29,6 +29,7 @@ I regularly publish my own `jsmart-mono` work sessions here:
 | **[@jsmart/jsmart-harness](packages/harness)** | Custom coding agent harness |
 | **[@jsmart/jsmart-gateway](packages/gateway)** | Multi-channel gateway with agent routing |
 | **[@jsmart/jsmart-coding-agent](packages/coding-agent)** | Interactive coding agent CLI with session management |
+| **[@jsmart/jsmart-memory](packages/memory)** | Persistent memory system for agents across sessions |
 
 ## Contributing
 

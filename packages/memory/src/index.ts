@@ -4,6 +4,5 @@ export type {
 	MemoryIndexEntry,
 	MemoryManagerOptions,
 	MemoryOperation,
-	MemoryState,
 	MemoryType,
 } from "./types.js";
