@@ -30,6 +30,27 @@ export type MemoryOperation =
 	| { op: "delete"; name: string; reason: string }
 	| { op: "skip" };
 
+/**
+ * A single search result from hybridSearch() — a chunk of a memory file
+ * with BM25 relevance score and a line-level citation.
+ */
+export interface MemorySearchResult {
+	/** Memory slug, e.g. "user-lang-pref" */
+	name: string;
+	/** One-line description from the index */
+	description: string;
+	/** 1-indexed line in the .md file where this chunk starts */
+	startLine: number;
+	/** 1-indexed line in the .md file where this chunk ends */
+	endLine: number;
+	/** BM25-derived relevance score, 0–1 range */
+	score: number;
+	/** Text of this chunk (may be the full content for small memories) */
+	snippet: string;
+	/** Citation string, e.g. "user-lang-pref.md#L9-L15" */
+	citation: string;
+}
+
 /** Options for MemoryManager constructor. */
 export interface MemoryManagerOptions {
 	/** Directory to store memory files, e.g. "<project>/.jsmart/memory/". */

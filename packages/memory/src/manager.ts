@@ -1,8 +1,10 @@
+import { join } from "node:path";
 import type { Message } from "@jsmart/jsmart-ai";
 import { MemoryExtractor } from "./extractor.js";
 import { MemoryLoader } from "./loader.js";
+import { MemorySearchIndex } from "./search-index.js";
 import { MemoryStore } from "./store.js";
-import type { Memory, MemoryManagerOptions } from "./types.js";
+import type { Memory, MemoryManagerOptions, MemorySearchResult } from "./types.js";
 
 /**
  * Orchestrates persistent memory for an agent session.
@@ -22,24 +24,44 @@ import type { Memory, MemoryManagerOptions } from "./types.js";
  * // Trigger extraction (upper layer controls timing/interval)
  * mem.generalMemory(messages);
  *
- * // Search is exposed for upper layers to build tools on top of
+ * // Keyword search (original, unchanged)
  * mem.search("user preferences");
+ *
+ * // FTS5 BM25 search with line citations (new)
+ * mem.hybridSearch("user preferences");
  * ```
  */
 export class MemoryManager {
 	private readonly store: MemoryStore;
 	private readonly loader: MemoryLoader;
 	private readonly extractor: MemoryExtractor;
+	private readonly memoryDir: string;
+	/** Lazy-initialised in ensureDir(). */
+	private searchIndex?: MemorySearchIndex;
 
 	constructor(options: MemoryManagerOptions) {
+		this.memoryDir = options.memoryDir;
 		this.store = new MemoryStore(options.memoryDir);
 		this.loader = new MemoryLoader(this.store);
 		this.extractor = new MemoryExtractor(this.store, options.extractionModel, options.extractionApiKey);
 	}
 
-	/** Ensures the memory directory exists. Call once at session start. */
+	/**
+	 * Ensures the memory directory exists and initialises the search index.
+	 * Must be called once at session start before any search or extraction.
+	 */
 	ensureDir(): void {
 		this.store.ensureDir();
+
+		// Initialise SQLite FTS5 search index (stored alongside memory files)
+		const dbPath = join(this.memoryDir, "search.db");
+		this.searchIndex = new MemorySearchIndex(dbPath);
+
+		// Warm the index with any memories written in a previous session
+		const existing = this.store.readAll();
+		if (existing.length > 0) {
+			this.searchIndex.reindex(existing);
+		}
 	}
 
 	/**
@@ -82,6 +104,39 @@ export class MemoryManager {
 		});
 	}
 
+	/**
+	 * FTS5 BM25-ranked search — returns chunks with relevance scores and
+	 * line-level citations (e.g. `user-lang-pref.md#L9-L15`).
+	 *
+	 * Unlike `search()` this method:
+	 * - Ranks results by relevance (not just match/no-match)
+	 * - Returns snippets (sub-file chunks) instead of full memory content
+	 * - Includes file + line citations for traceability
+	 *
+	 * Requires `ensureDir()` to have been called. If the search index is not
+	 * yet initialised (e.g. in tests that skip ensureDir), falls back to
+	 * wrapping `search()` results as MemorySearchResult objects.
+	 *
+	 * @param query      Natural-language search query.
+	 * @param opts.maxResults  Max results to return (default 8).
+	 */
+	hybridSearch(query: string, opts?: { maxResults?: number }): MemorySearchResult[] {
+		if (this.searchIndex) {
+			return this.searchIndex.search(query, opts);
+		}
+
+		// Fallback: wrap classic search() results as MemorySearchResult
+		return this.search(query).map((m) => ({
+			name: m.name,
+			description: m.description,
+			startLine: 9, // content starts after the 8-line frontmatter
+			endLine: 9 + m.content.split("\n").length - 1,
+			score: 0.5,
+			snippet: m.content,
+			citation: `${m.name}.md`,
+		}));
+	}
+
 	// ── private ────────────────────────────────────────────────────────────────
 
 	private _triggerExtraction(messages: Message[]): void {
@@ -89,8 +144,16 @@ export class MemoryManager {
 			return;
 		}
 
-		this.extractor.extract(messages).catch((err: Error) => {
-			console.warn("[memory] Background extraction failed:", err.message);
-		});
+		this.extractor
+			.extract(messages)
+			.then(() => {
+				// Sync the FTS index to reflect newly written/updated/deleted memories
+				if (this.searchIndex) {
+					this.searchIndex.reindex(this.store.readAll());
+				}
+			})
+			.catch((err: Error) => {
+				console.warn("[memory] Background extraction failed:", err.message);
+			});
 	}
 }
