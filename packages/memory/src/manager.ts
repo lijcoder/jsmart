@@ -63,15 +63,23 @@ export class MemoryManager {
 
 	/**
 	 * Keyword search across all memories (name, description, content).
-	 * Case-insensitive. Use this to build framework-specific tool wrappers.
+	 * Splits the query into whitespace-separated tokens and requires ALL tokens
+	 * to match somewhere in the memory (AND logic). Case-insensitive.
+	 *
+	 * Example: query "中文 语言 偏好" matches a memory containing all three
+	 * words "中文", "语言", "偏好" anywhere in its text.
 	 */
 	search(query: string): Memory[] {
-		const q = query.toLowerCase();
-		return this.store
-			.readAll()
-			.filter(
-				(m) => m.name.includes(q) || m.description.toLowerCase().includes(q) || m.content.toLowerCase().includes(q),
-			);
+		const tokens = query
+			.trim()
+			.split(/\s+/)
+			.map((t) => t.toLowerCase());
+		if (tokens.length === 0 || (tokens.length === 1 && tokens[0] === "")) return [];
+
+		return this.store.readAll().filter((m) => {
+			const haystack = `${m.name} ${m.description} ${m.content}`.toLowerCase();
+			return tokens.every((token) => haystack.includes(token));
+		});
 	}
 
 	// ── private ────────────────────────────────────────────────────────────────
