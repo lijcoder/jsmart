@@ -1,3 +1,5 @@
+import type { AgentTool } from "@jsmart/jsmart-agent-core";
+import type { Skill } from "@jsmart/jsmart-harness";
 import {
 	AgentSession,
 	createBashTool,
@@ -6,6 +8,7 @@ import {
 	createLsTool,
 	createReadTool,
 	createWriteTool,
+	DefaultResourceLoader,
 	loadPromptTemplateFromDirs,
 	ModelManager,
 	NodeFsProvider,
@@ -26,8 +29,13 @@ export interface ResultState<T> {
 
 export class CodingSession {
 	private agentSession: AgentSession;
+	private workspace: string;
+	private tools: AgentTool<any, any>[];
+	private skills: Skill[];
 
 	constructor(projectDir: string, config: ResolvedConfig) {
+		this.workspace = projectDir;
+
 		// Generate session file path (use sessionId to resume if provided)
 		const sessionFile = generateSessionFilePath(config.sessionsDir, projectDir, config.sessionId);
 
@@ -37,7 +45,7 @@ export class CodingSession {
 		const customContent = loadAgentsFile(config.projectDir);
 		const fsProvider = new NodeFsProvider({ cwd: projectDir });
 		const shellProvider = new NodeShellProvider({ cwd: projectDir });
-		const tools = [
+		this.tools = [
 			createBashTool(shellProvider, fsProvider),
 			createReadTool(fsProvider),
 			createWriteTool(fsProvider),
@@ -45,6 +53,9 @@ export class CodingSession {
 			createLsTool(fsProvider),
 			createGrepTool(fsProvider),
 		];
+
+		const resourceLoader = new DefaultResourceLoader({ skillPaths: config.skillPaths });
+		this.skills = resourceLoader.getSkills();
 
 		this.agentSession = new AgentSession(
 			projectDir,
@@ -54,7 +65,7 @@ export class CodingSession {
 			{
 				promptTemplate: promptTemplate ?? undefined,
 				customContent: customContent ?? undefined,
-				tools: tools,
+				tools: this.tools,
 			},
 		);
 	}
@@ -123,6 +134,21 @@ export class CodingSession {
 	/** Get message count */
 	messageCount(): number {
 		return this.agentSession.messageCount();
+	}
+
+	/** Get workspace directory */
+	getWorkspace(): string {
+		return this.workspace;
+	}
+
+	/** Get tools available to the agent */
+	getTools(): AgentTool<any, any>[] {
+		return this.tools;
+	}
+
+	/** Get skills loaded for this session */
+	getSkills(): Skill[] {
+		return this.skills;
 	}
 }
 

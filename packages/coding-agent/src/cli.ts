@@ -5,6 +5,11 @@
  * Usage:
  *   npx tsx src/cli.ts              # uses current directory
  *   npx tsx src/cli.ts --init       # initialize global config
+ *   npx tsx src/cli.ts --workspace /path/to/project
+ *   npx tsx src/cli.ts --json "prompt"  # non-interactive JSON output
+ *   echo "prompt" | npx tsx src/cli.ts --json  # JSON from stdin
+ *   npx tsx src/cli.ts --json --workspace /path "prompt"
+ *   npx tsx src/cli.ts --json --model openai/gpt-4o "prompt"
  *
  * Keys:
  *   Enter        - Submit input
@@ -17,6 +22,7 @@
 import { CodingSession } from "./coding-session.js";
 import { initGlobalConfig, listSessionFiles, loadConfig } from "./config.js";
 import { colorize, handleAgentEvent } from "./event-output.js";
+import { JsonSessionCollector } from "./json-output.js";
 
 // ── ANSI helpers ────────────────────────────────────────────────────
 
@@ -31,31 +37,196 @@ function writePrompt(text: string): void {
 	process.stdout.write(`${text} `);
 }
 
+// ── Argument parsing ───────────────────────────────────────────────
+
+interface ParsedArgs {
+	init: boolean;
+	json: boolean;
+	workspace: string;
+	sessionId?: string;
+	model?: string;
+	/** Positional arguments after all flags, used as prompt in --json mode. */
+	positional: string[];
+}
+
+const FLAGS_WITH_VALUE = new Set(["--workspace", "--session", "--model"]);
+const BOOLEAN_FLAGS = new Set(["--init", "--json"]);
+
+function parseArgs(argv: string[]): ParsedArgs {
+	const result: ParsedArgs = {
+		init: false,
+		json: false,
+		workspace: process.cwd(),
+		positional: [],
+	};
+
+	let i = 2; // skip node and script path
+	while (i < argv.length) {
+		const arg = argv[i];
+
+		if (BOOLEAN_FLAGS.has(arg)) {
+			if (arg === "--init") result.init = true;
+			if (arg === "--json") result.json = true;
+			i++;
+			continue;
+		}
+
+		if (FLAGS_WITH_VALUE.has(arg)) {
+			const value = argv[i + 1];
+			if (value && !value.startsWith("--")) {
+				if (arg === "--workspace") result.workspace = value;
+				if (arg === "--session") result.sessionId = value;
+				if (arg === "--model") result.model = value;
+				i += 2;
+				continue;
+			}
+			// value missing or looks like another flag — skip flag
+			i++;
+			continue;
+		}
+
+		// positional argument
+		result.positional.push(arg);
+		i++;
+	}
+
+	return result;
+}
+
 // ── Command parsing ─────────────────────────────────────────────────
 
 function parseCommand(input: string): string[] {
 	return input.split(/\s+/);
 }
 
+// ── JSON (non-interactive) mode ────────────────────────────────────
+
+/**
+ * Resolve the user prompt for JSON mode.
+ * Uses positional args from ParsedArgs, or reads from stdin.
+ */
+async function resolveJsonPrompt(args: ParsedArgs): Promise<string> {
+	if (args.positional.length > 0) {
+		return args.positional.join(" ");
+	}
+
+	// Read from stdin if not a TTY
+	if (!process.stdin.isTTY) {
+		process.stdin.setEncoding("utf8");
+		let data = "";
+		for await (const chunk of process.stdin) {
+			data += chunk;
+		}
+		return data.trim();
+	}
+
+	throw new Error('No prompt provided. Usage: jsmart-coding --json "your prompt" or pipe via stdin.');
+}
+
+async function runJsonMode(args: ParsedArgs): Promise<void> {
+	// Load configuration
+	const { config, error } = loadConfig(args.workspace, args.sessionId);
+	if (error || !config) {
+		process.stderr.write(`Error loading config: ${error}\n`);
+		process.exit(1);
+	}
+
+	// Resolve prompt
+	let prompt: string;
+	try {
+		prompt = await resolveJsonPrompt(args);
+	} catch (e) {
+		process.stderr.write(`${(e as Error).message}\n`);
+		process.exit(1);
+	}
+
+	if (!prompt) {
+		process.stderr.write("Error: empty prompt.\n");
+		process.exit(1);
+	}
+
+	// Create coding session
+	const session = new CodingSession(config.projectDir, config);
+
+	// Apply model override if specified
+	if (args.model && !applyModel(session, args.model, true)) {
+		process.exit(1);
+	}
+
+	// Set up collector
+	const collector = new JsonSessionCollector();
+	collector.setMetadata({
+		systemPrompt: session.getSystemPrompt(),
+		model: session.getCurrentModel(),
+		workspace: session.getWorkspace(),
+		tools: session.getTools(),
+		skills: session.getSkills(),
+	});
+	collector.setRequest(prompt);
+
+	// Collect events
+	session.subscribe((event) => {
+		collector.feed(event);
+	});
+
+	// Run the prompt
+	try {
+		await session.prompt(prompt);
+	} catch (err) {
+		if ((err as Error).name !== "AbortError") {
+			process.stderr.write(`Error: ${err}\n`);
+			process.exit(1);
+		}
+	}
+
+	// Output structured JSON at the end
+	const output = collector.finalize();
+	process.stdout.write(`${JSON.stringify(output)}\n`);
+
+	process.exit(0);
+}
+
 // ── Main ────────────────────────────────────────────────────────────
 
+/** Apply --model override in provider/model format. Returns false on error. */
+function applyModel(session: CodingSession, model: string, toStderr: boolean): boolean {
+	const slashIdx = model.indexOf("/");
+	if (slashIdx === -1) {
+		const msg = "Error: --model format must be provider/model (e.g. openai/gpt-4o)";
+		if (toStderr) process.stderr.write(`${msg}\n`);
+		else show(msg);
+		return false;
+	}
+	const provider = model.slice(0, slashIdx);
+	const modelId = model.slice(slashIdx + 1);
+	const result = session.changeModel(provider, modelId);
+	if (!result.isSuccess) {
+		const msg = `Error: ${result.error}`;
+		if (toStderr) process.stderr.write(`${msg}\n`);
+		else show(msg);
+		return false;
+	}
+	return true;
+}
+
 async function main(): Promise<void> {
+	const args = parseArgs(process.argv);
+
 	// Handle --init flag
-	if (process.argv.includes("--init")) {
+	if (args.init) {
 		const globalDir = initGlobalConfig();
 		show(`Global config initialized at: ${globalDir}`);
 		process.exit(0);
 	}
 
-	// Parse --session <id> flag
-	const sessionIdx = process.argv.indexOf("--session");
-	let sessionId: string | undefined;
-	if (sessionIdx !== -1 && sessionIdx + 1 < process.argv.length) {
-		sessionId = process.argv[sessionIdx + 1];
+	// Handle --json flag (non-interactive JSON output mode)
+	if (args.json) {
+		await runJsonMode(args);
+		return;
 	}
 
 	// Load configuration
-	const { config, error } = loadConfig(process.cwd(), sessionId);
+	const { config, error } = loadConfig(args.workspace, args.sessionId);
 	if (error || !config) {
 		show(`Error loading config: ${error}`);
 		process.exit(1);
@@ -70,6 +241,9 @@ async function main(): Promise<void> {
 
 	// Create coding session
 	const session = new CodingSession(config.projectDir, config);
+
+	// Apply model override if specified
+	if (args.model) applyModel(session, args.model, false);
 
 	// Subscribe to agent events
 	session.subscribe(handleAgentEvent);
