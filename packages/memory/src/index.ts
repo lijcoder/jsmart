@@ -1,10 +1,14 @@
 export { MemoryManager } from "./manager.js";
-export { MemorySearchIndex } from "./search-index.js";
+export { MemoryStore } from "./memory-store.js";
+export { SessionStore } from "./session-store.js";
+export { SessionSummarizer } from "./session-summarizer.js";
 export type {
-	Memory,
-	MemoryIndexEntry,
+	MemoryEntry,
 	MemoryManagerOptions,
-	MemoryOperation,
-	MemorySearchResult,
-	MemoryType,
+	MemoryResult,
+	MemoryTarget,
+	SessionMessage,
+	SessionMeta,
+	SessionSearchOptions,
+	SessionSearchResult,
 } from "./types.js";

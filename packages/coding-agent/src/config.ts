@@ -23,6 +23,10 @@ export interface ResolvedConfig {
 	skillPaths: string[];
 	/** Session ID used to resume a previous session (optional) */
 	sessionId?: string;
+	/** User ID for memory scoping (defaults to "default") */
+	userId?: string;
+	/** Project ID for multi-project filtering */
+	projectId?: string;
 }
 
 export interface ConfigLoadResult {
@@ -281,6 +285,8 @@ export function loadConfig(cwd: string = process.cwd(), sessionId?: string): Con
 		modelFile,
 		skillPaths,
 		sessionId,
+		userId: "default",
+		projectId: projectDir.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/^_+|_+$/g, ""),
 	};
 
 	return { config, error: undefined };

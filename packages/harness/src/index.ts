@@ -21,9 +21,8 @@ export {
 } from "./compaction.js";
 export type { ExecOptions, ExecResult, Executor } from "./executor.js";
 export { createExecutor, HostExecutor } from "./executor.js";
-
 export { ModelManager } from "./model-manager.js";
-export type { BuildSystemPromptOptions, PromptVariable } from "./prompts.js";
+export type { BuildSystemPromptOptions } from "./prompts.js";
 export {
 	buildSystemPrompt,
 	DEFAULT_SYSTEM_PROMPT_TEMPLATE,
@@ -60,7 +59,8 @@ export {
 	createEditTool,
 	createGrepTool,
 	createLsTool,
-	createMemorySearchTool,
+	createMemoryTool,
 	createReadTool,
+	createSessionSearchTool,
 	createWriteTool,
 } from "./tools/index.js";

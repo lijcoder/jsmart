@@ -2,6 +2,7 @@ import type { AgentTool, StreamFn } from "@jsmart/jsmart-agent-core";
 import { Agent, type AgentEvent, type AgentMessage } from "@jsmart/jsmart-agent-core";
 import type { Api, AssistantMessage, Model } from "@jsmart/jsmart-ai";
 import { isContextOverflow } from "@jsmart/jsmart-ai";
+import { MemoryManager } from "@jsmart/jsmart-memory";
 import {
 	type CompactionResult,
 	calculateContextTokens,
@@ -18,7 +19,24 @@ import { buildSystemPrompt } from "./prompts.js";
 import { DefaultResourceLoader, type ResourceLoader } from "./resource-manager.js";
 import { getLatestCompactionEntry, type SessionManager } from "./session-manager.js";
 import type { SettingsManager } from "./settings-manager.js";
+import { createMemoryTool, createSessionSearchTool } from "./tools/index.js";
 import { sleep } from "./utils/sleep.js";
+
+const MEMORY_GUIDANCE = `You have persistent memory across sessions. Save durable facts using the memory
+tool: user preferences, environment details, tool quirks, and stable conventions.
+Memory is injected into every turn, so keep it compact and focused on facts that
+will still matter later.
+
+Prioritize what reduces future user steering — the most valuable memory is one
+that prevents the user from having to correct or remind you again.
+User preferences and recurring corrections matter more than procedural task details.
+
+Do NOT save task progress, session outcomes, completed-work logs, or temporary TODO
+state to memory; use session_search to recall those from past transcripts.
+
+TWO TARGETS:
+- 'user': who the user is — name, role, preferences, communication style, pet peeves
+- 'memory': your notes — environment facts, project conventions, tool quirks, lessons learned`;
 
 export interface ResultState<T> {
 	isSuccess: boolean;
@@ -52,6 +70,14 @@ export interface AgentSessionOptions {
 	/** Tools to use. If not provided, defaults to createTools(createExecutor()) */
 	tools?: AgentTool<any>[];
 	streamFn?: StreamFn;
+	/** Memory configuration. If provided, memory + session_search tools are auto-added. */
+	memory?: {
+		memoryDir: string;
+		userId: string;
+		projectId?: string;
+		summarizationModel: import("@jsmart/jsmart-ai").Model<import("@jsmart/jsmart-ai").Api>;
+		summarizationApiKey?: string;
+	};
 }
 
 export class AgentSession {
@@ -66,6 +92,8 @@ export class AgentSession {
 	private modelManager: ModelManager;
 
 	private agent: Agent;
+	// Memory
+	private memoryManager?: MemoryManager;
 	// Event subscription state
 	private _unsubscribeAgent?: () => void;
 
@@ -126,7 +154,44 @@ export class AgentSession {
 			customContent: options?.customContent,
 		});
 		this.agent.state.systemPrompt = systemPrompt;
+		this._initMemory(options, tools, skills, workspace);
 		this._unsubscribeAgent = this.agent.subscribe(this._handleAgentEvent);
+	}
+
+	/** Initialize memory manager, inject tools, and rebuild system prompt. */
+	private _initMemory(
+		options: AgentSessionOptions | undefined,
+		tools: AgentTool<any>[],
+		skills: any,
+		workspace: string,
+	): void {
+		const memCfg = options?.memory;
+		if (!memCfg) return;
+
+		this.memoryManager = new MemoryManager({
+			memoryDir: memCfg.memoryDir,
+			userId: memCfg.userId,
+			projectId: memCfg.projectId,
+			summarizationModel: memCfg.summarizationModel,
+			summarizationApiKey: memCfg.summarizationApiKey,
+		});
+		this.memoryManager.ensureDir();
+
+		const memoryTools = [createMemoryTool(this.memoryManager), createSessionSearchTool(this.memoryManager)];
+		this.agent.state.tools = [...tools, ...memoryTools];
+
+		const memPrompt = this.memoryManager.formatForPrompt();
+		this.agent.state.systemPrompt = buildSystemPrompt({
+			workspace,
+			selectedTools: [...tools, ...memoryTools],
+			skills,
+			template: options?.promptTemplate,
+			variables: {
+				memory: memPrompt ?? "",
+				guidance: MEMORY_GUIDANCE,
+			},
+			customContent: options?.customContent,
+		});
 	}
 
 	/** Internal handler for agent events - shared by subscribe and reconnect */
@@ -178,6 +243,18 @@ export class AgentSession {
 					});
 					this._retryAttempt = 0;
 				}
+			}
+		}
+
+		// Memory: persist session messages on agent_end
+		if (event.type === "agent_end" && this.memoryManager) {
+			const sessionId = this.sessionManager.getSessionId();
+			const modelName = `${this.providerName}/${this.modelName}`;
+			const aiMessages = event.messages.filter(
+				(m) => m.role === "user" || m.role === "assistant" || m.role === "toolResult",
+			) as import("@jsmart/jsmart-ai").Message[];
+			if (aiMessages.length > 0) {
+				this.memoryManager.insertSessionMessages(sessionId, "cli", modelName, aiMessages);
 			}
 		}
 
@@ -372,6 +449,14 @@ export class AgentSession {
 
 	getSessionFilePath(): string | undefined {
 		return this.sessionManager.getSessionFile();
+	}
+
+	getSessionId(): string {
+		return this.sessionManager.getSessionId();
+	}
+
+	getMemoryManager(): MemoryManager | undefined {
+		return this.memoryManager;
 	}
 
 	/** Get current context token count */

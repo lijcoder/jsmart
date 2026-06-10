@@ -40,7 +40,6 @@
 		"@jsmart/jsmart-agent-core": "^0.0.1",
 		"@jsmart/jsmart-ai": "^0.0.1",
 		"@jsmart/jsmart-harness": "^0.0.1",
-		"@jsmart/jsmart-memory": "^0.0.1",
 		"@sinclair/typebox": "^0.34.30",
 		"ajv": "^8.17.1"
 	},

@@ -1,68 +1,81 @@
 import type { Api, Model } from "@jsmart/jsmart-ai";
 
-export type MemoryType = "user" | "project" | "feedback" | "reference";
+/** Target memory store: agent's own notes or user profile. */
+export type MemoryTarget = "memory" | "user";
 
-/** A single persisted memory entry. */
-export interface Memory {
-	/** Unique slug identifier, kebab-case, e.g. "user-lang-pref". */
-	name: string;
-	/** One-line summary shown in the index to help the agent decide relevance. */
-	description: string;
-	type: MemoryType;
-	/** Markdown body content. */
+/** A single memory entry in MEMORY.md or USER.md. */
+export interface MemoryEntry {
+	/** The plain-text content of this entry. */
 	content: string;
-	created: string; // ISO 8601
-	updated: string; // ISO 8601
 }
 
-/** Entry in MEMORY.md index. */
-export interface MemoryIndexEntry {
-	name: string;
-	description: string;
-	/** Filename, e.g. "user-lang-pref.md" */
-	file: string;
+/** Result returned by memory tool operations. */
+export interface MemoryResult {
+	success: boolean;
+	target: MemoryTarget;
+	message?: string;
+	usage: string; // e.g. "34% — 748/2,200 chars"
+	entryCount: number;
+	entries: string[];
 }
 
-/** Operations returned by the LLM extractor. */
-export type MemoryOperation =
-	| { op: "create"; name: string; description: string; type: MemoryType; content: string }
-	| { op: "update"; name: string; description?: string; content: string }
-	| { op: "delete"; name: string; reason: string }
-	| { op: "skip" };
+// ── Session search types (unchanged from P0-P2) ───────────────────────────
 
-/**
- * A single search result from hybridSearch() — a chunk of a memory file
- * with BM25 relevance score and a line-level citation.
- */
-export interface MemorySearchResult {
-	/** Memory slug, e.g. "user-lang-pref" */
-	name: string;
-	/** One-line description from the index */
-	description: string;
-	/** 1-indexed line in the .md file where this chunk starts */
-	startLine: number;
-	/** 1-indexed line in the .md file where this chunk ends */
-	endLine: number;
-	/** BM25-derived relevance score, 0–1 range */
-	score: number;
-	/** Text of this chunk (may be the full content for small memories) */
+export interface SessionMessage {
+	id: number;
+	sessionId: string;
+	role: "user" | "assistant" | "toolResult";
+	content: string;
+	toolName?: string;
+	timestamp: number;
+}
+
+export interface SessionMeta {
+	id: string;
+	source: string;
+	model: string;
+	startedAt: number;
+	lastActive: number;
+	messageCount: number;
+	preview: string;
+}
+
+export interface SessionSearchResult {
+	sessionId: string;
+	title: string;
+	source: string;
+	startedAt: string;
+	model: string;
 	snippet: string;
-	/** Citation string, e.g. "user-lang-pref.md#L9-L15" */
-	citation: string;
+	score: number;
+	summary?: string;
 }
 
-/** Options for MemoryManager constructor. */
+export interface SessionSearchOptions {
+	query?: string;
+	/** ISO 8601 start date, e.g. '2025-06-01'. If set, only sessions active on or after this date. */
+	from?: string;
+	/** ISO 8601 end date. If set, only sessions active on or before this date. */
+	to?: string;
+	maxResults?: number;
+	roleFilter?: string;
+}
+
+// ── MemoryManager options ─────────────────────────────────────────────────
+
 export interface MemoryManagerOptions {
-	/** Directory to store memory files, e.g. "<project>/.jsmart/memory/". */
+	/** Base directory, e.g. "<project>/.jsmart/memory/". User data stored in {userId}/ subfolder. */
 	memoryDir: string;
-	/**
-	 * Model used for background extraction. If omitted, automatic extraction is disabled.
-	 * Tip: use a small/fast model (e.g. haiku) to reduce cost.
-	 */
-	extractionModel: Model<Api>;
-	/**
-	 * API key for the extraction model's provider.
-	 * If omitted, the provider's default key resolution is used.
-	 */
-	extractionApiKey: string;
+	/** Required: scopes memories and sessions to a specific user. */
+	userId: string;
+	/** Optional: scopes to a project for multi-project filtering. */
+	projectId?: string;
+	/** Character limit for MEMORY.md (default: 2200). */
+	memoryCharLimit?: number;
+	/** Character limit for USER.md (default: 1375). */
+	userCharLimit?: number;
+
+	// session_search summarization (required — use a cheap/fast model like haiku)
+	summarizationModel: Model<Api>;
+	summarizationApiKey?: string;
 }

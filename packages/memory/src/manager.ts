@@ -1,159 +1,152 @@
 import { join } from "node:path";
 import type { Message } from "@jsmart/jsmart-ai";
-import { MemoryExtractor } from "./extractor.js";
-import { MemoryLoader } from "./loader.js";
-import { MemorySearchIndex } from "./search-index.js";
-import { MemoryStore } from "./store.js";
-import type { Memory, MemoryManagerOptions, MemorySearchResult } from "./types.js";
+import { MemoryStore } from "./memory-store.js";
+import { SessionStore } from "./session-store.js";
+import { SessionSummarizer } from "./session-summarizer.js";
+import type {
+	MemoryManagerOptions,
+	MemoryResult,
+	MemoryTarget,
+	SessionMessage,
+	SessionSearchOptions,
+	SessionSearchResult,
+} from "./types.js";
 
 /**
- * Orchestrates persistent memory for an agent session.
+ * Hermes-style memory manager with frozen-snapshot semantics.
  *
- * This class only depends on `@jsmart/jsmart-ai` — it is not coupled to any
- * agent framework. Upper layers (e.g. harness, coding-agent) are responsible
- * for wiring the hooks and creating framework-specific tools.
- *
- * Usage:
- * ```ts
- * const mem = new MemoryManager({ memoryDir, extractionModel, extractionApiKey });
- * mem.ensureDir();
- *
- * // Inject into system prompt at session start
- * const memBlock = mem.formatForPrompt(); // null if no memories yet
- *
- * // Trigger extraction (upper layer controls timing/interval)
- * mem.generalMemory(messages);
- *
- * // Keyword search (original, unchanged)
- * mem.search("user preferences");
- *
- * // FTS5 BM25 search with line citations (new)
- * mem.hybridSearch("user preferences");
- * ```
+ * - MEMORY.md + USER.md with § delimiter, always in system prompt (frozen snapshot).
+ * - LLM calls the `memory` tool (add/replace/remove) directly.
+ * - Nudge background review every N turns (default 10) for passive memory capture.
+ * - session_search for cross-session conversation recall (SQLite FTS5 + Jieba).
  */
 export class MemoryManager {
 	private readonly store: MemoryStore;
-	private readonly loader: MemoryLoader;
-	private readonly extractor: MemoryExtractor;
 	private readonly memoryDir: string;
-	/** Lazy-initialised in ensureDir(). */
-	private searchIndex?: MemorySearchIndex;
+	private readonly userId: string;
+	private readonly projectId?: string;
+	private sessionStore?: SessionStore;
+	private summarizer: SessionSummarizer;
 
 	constructor(options: MemoryManagerOptions) {
-		this.memoryDir = options.memoryDir;
-		this.store = new MemoryStore(options.memoryDir);
-		this.loader = new MemoryLoader(this.store);
-		this.extractor = new MemoryExtractor(this.store, options.extractionModel, options.extractionApiKey);
+		this.userId = options.userId;
+		this.projectId = options.projectId;
+
+		// User-scoped directory: {memoryDir}/{userId}/
+		const userDir = join(options.memoryDir, options.userId);
+		this.memoryDir = userDir;
+
+		this.store = new MemoryStore(userDir, options.memoryCharLimit ?? 2200, options.userCharLimit ?? 1375);
+
+		this.summarizer = new SessionSummarizer(options.summarizationModel, options.summarizationApiKey);
 	}
 
-	/**
-	 * Ensures the memory directory exists and initialises the search index.
-	 * Must be called once at session start before any search or extraction.
-	 */
+	// ── Lifecycle ──────────────────────────────────────────────────────────
+
 	ensureDir(): void {
 		this.store.ensureDir();
+		this.store.loadFromDisk();
 
-		// Initialise SQLite FTS5 search index (stored alongside memory files)
-		const dbPath = join(this.memoryDir, "search.db");
-		this.searchIndex = new MemorySearchIndex(dbPath);
-
-		// Warm the index with any memories written in a previous session
-		const existing = this.store.readAll();
-		if (existing.length > 0) {
-			this.searchIndex.reindex(existing);
-		}
+		const sessionsDbPath = join(this.memoryDir, "sessions.db");
+		this.sessionStore = new SessionStore(sessionsDbPath);
 	}
 
+	// ── System prompt (frozen snapshot) ────────────────────────────────────
+
 	/**
-	 * Returns a markdown block describing the memory index for injection into
-	 * the agent system prompt. Returns null when there are no memories yet.
+	 * Returns the memory + user profile blocks for system prompt injection.
+	 * Uses the frozen snapshot — stable across the entire session for prefix caching.
 	 */
 	formatForPrompt(): string | null {
-		return this.loader.formatForPrompt();
+		const parts: string[] = [];
+		const mem = this.store.formatForSystemPrompt("memory");
+		const usr = this.store.formatForSystemPrompt("user");
+		if (mem) parts.push(mem);
+		if (usr) parts.push(usr);
+		return parts.length > 0 ? parts.join("\n\n") : null;
 	}
 
-	/**
-	 * Trigger background extraction on the given messages.
-	 * The upper layer is responsible for batching and timing — this method
-	 * fires extraction immediately on every call.
-	 *
-	 * @param messages - Messages to extract memories from
-	 */
-	generalMemory(messages: Message[]): void {
-		this._triggerExtraction(messages);
+	// ── Memory tool ───────────────────────────────────────────────────────
+
+	add(target: MemoryTarget, content: string): MemoryResult {
+		return this.store.add(target, content);
 	}
 
-	/**
-	 * Keyword search across all memories (name, description, content).
-	 * Splits the query into whitespace-separated tokens and requires ALL tokens
-	 * to match somewhere in the memory (AND logic). Case-insensitive.
-	 *
-	 * Example: query "中文 语言 偏好" matches a memory containing all three
-	 * words "中文", "语言", "偏好" anywhere in its text.
-	 */
-	search(query: string): Memory[] {
-		const tokens = query
-			.trim()
-			.split(/\s+/)
-			.map((t) => t.toLowerCase());
-		if (tokens.length === 0 || (tokens.length === 1 && tokens[0] === "")) return [];
-
-		return this.store.readAll().filter((m) => {
-			const haystack = `${m.name} ${m.description} ${m.content}`.toLowerCase();
-			return tokens.every((token) => haystack.includes(token));
-		});
+	replace(target: MemoryTarget, oldText: string, newContent: string): MemoryResult {
+		return this.store.replace(target, oldText, newContent);
 	}
 
-	/**
-	 * FTS5 BM25-ranked search — returns chunks with relevance scores and
-	 * line-level citations (e.g. `user-lang-pref.md#L9-L15`).
-	 *
-	 * Unlike `search()` this method:
-	 * - Ranks results by relevance (not just match/no-match)
-	 * - Returns snippets (sub-file chunks) instead of full memory content
-	 * - Includes file + line citations for traceability
-	 *
-	 * Requires `ensureDir()` to have been called. If the search index is not
-	 * yet initialised (e.g. in tests that skip ensureDir), falls back to
-	 * wrapping `search()` results as MemorySearchResult objects.
-	 *
-	 * @param query      Natural-language search query.
-	 * @param opts.maxResults  Max results to return (default 8).
-	 */
-	hybridSearch(query: string, opts?: { maxResults?: number }): MemorySearchResult[] {
-		if (this.searchIndex) {
-			return this.searchIndex.search(query, opts);
+	remove(target: MemoryTarget, oldText: string): MemoryResult {
+		return this.store.remove(target, oldText);
+	}
+
+	// ── Session search (unchanged from P0-P2) ─────────────────────────────
+
+	sessionSearch(opts: SessionSearchOptions = {}): SessionSearchResult[] {
+		if (!this.sessionStore) return [];
+		return this.sessionStore.search(opts);
+	}
+
+	async sessionSearchAsync(opts: SessionSearchOptions = {}): Promise<SessionSearchResult[]> {
+		const results = this.sessionSearch(opts);
+		if (opts.query && results.length > 0) {
+			await this._summarizeAsync(results, opts.query);
 		}
-
-		// Fallback: wrap classic search() results as MemorySearchResult
-		return this.search(query).map((m) => ({
-			name: m.name,
-			description: m.description,
-			startLine: 9, // content starts after the 8-line frontmatter
-			endLine: 9 + m.content.split("\n").length - 1,
-			score: 0.5,
-			snippet: m.content,
-			citation: `${m.name}.md`,
-		}));
+		return results;
 	}
 
-	// ── private ────────────────────────────────────────────────────────────────
-
-	private _triggerExtraction(messages: Message[]): void {
-		if (messages.length === 0) {
-			return;
-		}
-
-		this.extractor
-			.extract(messages)
-			.then(() => {
-				// Sync the FTS index to reflect newly written/updated/deleted memories
-				if (this.searchIndex) {
-					this.searchIndex.reindex(this.store.readAll());
+	insertSessionMessages(sessionId: string, source: string, model: string, messages: Message[]): void {
+		if (!this.sessionStore) return;
+		const now = Date.now() / 1000;
+		const sms: SessionMessage[] = [];
+		for (const msg of messages) {
+			if (msg.role === "user" || msg.role === "assistant" || msg.role === "toolResult") {
+				let content: string;
+				if (typeof msg.content === "string") {
+					content = msg.content;
+				} else {
+					// Extract text + tool call names for searchable content
+					const parts: string[] = [];
+					for (const c of msg.content) {
+						if (c.type === "text" && c.text) parts.push(c.text);
+						else if (c.type === "toolCall" && "name" in c) parts.push(`[TOOL:${(c as any).name}]`);
+					}
+					content = parts.join(" ").trim();
 				}
-			})
-			.catch((err: Error) => {
-				console.warn("[memory] Background extraction failed:", err.message);
+				if (content) {
+					sms.push({ id: 0, sessionId, role: msg.role, content, timestamp: msg.timestamp ?? now * 1000 });
+				}
+			}
+		}
+		if (sms.length > 0) {
+			this.sessionStore.upsertSession({
+				id: sessionId,
+				source,
+				model,
+				startedAt: now,
+				lastActive: now,
+				messageCount: sms.length,
+				userId: this.userId,
+				projectId: this.projectId,
 			});
+			this.sessionStore.insertMessages(sms);
+		}
+	}
+
+	private async _summarizeAsync(results: SessionSearchResult[], query: string): Promise<void> {
+		if (!this.sessionStore) return;
+		const sessions = results.map((r) => ({
+			messages: this.sessionStore!.getMessages(r.sessionId),
+			query,
+			meta: { startedAt: r.startedAt, source: r.source, model: r.model },
+		}));
+		try {
+			const summaries = await this.summarizer!.summarizeAll(sessions);
+			for (let i = 0; i < results.length && i < summaries.length; i++) {
+				if (summaries[i]) results[i].summary = summaries[i];
+			}
+		} catch {
+			/* graceful */
+		}
 	}
 }
