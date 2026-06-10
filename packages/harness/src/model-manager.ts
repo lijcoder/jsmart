@@ -268,4 +268,12 @@ export class ModelManager {
 		const providerApiKey = this.providerConfigs.get(provider)?.apiKey;
 		return providerApiKey;
 	}
+
+	/**
+	 * Get API key for a provider.
+	 */
+	getApiKeyForProviderSync(provider: string): string | undefined {
+		const providerApiKey = this.providerConfigs.get(provider)?.apiKey;
+		return providerApiKey;
+	}
 }

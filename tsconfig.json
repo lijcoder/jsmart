@@ -16,7 +16,9 @@
 			"@jsmart/jsmart-gateway/*": ["./packages/gateway/src/*"],
 			"@sinclair/typebox": ["./node_modules/@sinclair/typebox"],
 			"@jsmart/jsmart-agent-old": ["./packages/agent-old/src/index.ts"],
-			"@jsmart/jsmart-agent-old/*": ["./packages/agent-old/src/*"]
+			"@jsmart/jsmart-agent-old/*": ["./packages/agent-old/src/*"],
+			"@jsmart/jsmart-memory": ["./packages/memory/src/index.ts"],
+			"@jsmart/jsmart-memory/*": ["./packages/memory/src/*"]
 		}
 	},
 	"include": ["packages/*/src/**/*", "packages/*/test/**/*"],

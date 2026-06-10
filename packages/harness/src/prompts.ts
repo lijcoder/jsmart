@@ -3,18 +3,6 @@ import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import type { Skill } from "./skills.js";
 
-/**
- * 系统提示词模板中的占位符变量。
- * 模板中使用 {{variable}} 格式，harness 会自动替换。
- * 如果模板中没有某个占位符，则不会生成对应内容。
- */
-export type PromptVariable =
-	| "tools" // 可用工具列表
-	| "skills" // 技能列表
-	| "date" // 当前日期
-	| "cwd" // 当前工作目录
-	| "custom"; // 自定义内容（由应用层传入）
-
 export interface BuildSystemPromptOptions {
 	/** Working directory. */
 	workspace: string;
@@ -24,16 +12,21 @@ export interface BuildSystemPromptOptions {
 	skills?: Skill[];
 	/**
 	 * 自定义提示词模板。
-	 * 使用 {{variable}} 占位符，支持的变量见 PromptVariable。
+	 * 使用 {{variable}} 占位符。
 	 * 如果未提供，使用内置默认模板。
-	 * 模板中没有的占位符不会被替换（对应内容不会出现在最终提示词中）。
 	 */
 	template?: string;
 	/**
-	 * 自定义内容，会替换模板中的 {{custom}} 占位符。
-	 * 可以是字符串，也可以是返回字符串的函数（支持动态生成）。
+	 * 自定义内容，替换模板中的 {{custom}} 占位符。
+	 * 可以是字符串，也可以是返回字符串的函数。
 	 */
 	customContent?: string | (() => string);
+	/**
+	 * 额外的模板变量。key 是占位符名，value 是替换值（或返回值的函数）。
+	 * 例如 { memory: "...", guidance: "..." } 会替换 {{memory}} 和 {{guidance}}。
+	 * 模板中不存在对应占位符的变量会被忽略，不会报错。
+	 */
+	variables?: Record<string, string | (() => string)>;
 }
 
 /** 默认提示词模板 */
@@ -53,18 +46,17 @@ Current working directory: {{cwd}}
  * 支持自定义模板，使用 {{variable}} 占位符。
  */
 export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
-	const { workspace: cwd, skills: providedSkills, template, customContent } = options;
+	const { workspace: cwd, skills: providedSkills, template, customContent, variables } = options;
 	const resolvedCwd = cwd;
 	const promptCwd = resolvedCwd.replace(/\\/g, "/");
 
 	const date = new Date().toISOString().slice(0, 10);
 	const skills = providedSkills ?? [];
 
-	// 选择模板
 	const promptTemplate = template ?? DEFAULT_SYSTEM_PROMPT_TEMPLATE;
 
-	// 构建各部分内容
-	const sections: Record<PromptVariable, string> = {
+	// Collect all template variables
+	const vars: Record<string, string> = {
 		tools: buildToolsSection(options.selectedTools),
 		skills: formatSkillsForPrompt(skills),
 		date: date,
@@ -72,8 +64,14 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		custom: resolveCustomContent(customContent),
 	};
 
-	// 替换占位符（只替换模板中存在的）
-	return replacePlaceholders(promptTemplate, sections);
+	// Merge user-provided variables
+	if (variables) {
+		for (const [key, val] of Object.entries(variables)) {
+			vars[key] = typeof val === "function" ? val() : val;
+		}
+	}
+
+	return replacePlaceholders(promptTemplate, vars);
 }
 
 /**
@@ -110,16 +108,15 @@ function resolveCustomContent(customContent?: string | (() => string)): string {
  *
  * 只替换模板中实际存在的占位符，没有的不会添加。
  */
-function replacePlaceholders(template: string, sections: Record<PromptVariable, string>): string {
+function replacePlaceholders(template: string, vars: Record<string, string>): string {
 	let result = template;
 
 	// 1. 先处理条件块
-	result = processConditionals(result, sections);
+	result = processConditionals(result, vars);
 
 	// 2. 再替换普通占位符
-	for (const [key, value] of Object.entries(sections) as [PromptVariable, string][]) {
+	for (const [key, value] of Object.entries(vars)) {
 		const placeholder = `{{${key}}}`;
-		// 只替换模板中存在的占位符
 		if (result.includes(placeholder)) {
 			result = result.replaceAll(placeholder, value);
 		}
@@ -135,14 +132,14 @@ function replacePlaceholders(template: string, sections: Record<PromptVariable, 
  * 处理模板中的条件块。
  * 支持 {{#if var}}...{{/if}}、{{#unless var}}...{{/unless}}、{{#else}}
  */
-function processConditionals(template: string, sections: Record<PromptVariable, string>): string {
+function processConditionals(template: string, vars: Record<string, string>): string {
 	let result = template;
 
 	// 处理 {{#if variable}}...{{#else}}...{{/if}} 和 {{#if variable}}...{{/if}}
 	result = result.replace(
 		/\{\{#if\s+(\w+)\}\}([\s\S]*?)(?:\{\{#else\}\}([\s\S]*?))?\{\{\/if\}\}/g,
 		(_match, variable, ifContent, elseContent) => {
-			const value = sections[variable as PromptVariable];
+			const value = vars[variable];
 			const hasValue = value !== undefined && value !== "";
 			return hasValue ? ifContent : (elseContent ?? "");
 		},
@@ -150,7 +147,7 @@ function processConditionals(template: string, sections: Record<PromptVariable, 
 
 	// 处理 {{#unless variable}}...{{/unless}}
 	result = result.replace(/\{\{#unless\s+(\w+)\}\}([\s\S]*?)\{\{\/unless\}\}/g, (_match, variable, content) => {
-		const value = sections[variable as PromptVariable];
+		const value = vars[variable];
 		const hasValue = value !== undefined && value !== "";
 		return hasValue ? "" : content;
 	});

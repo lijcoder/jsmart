@@ -1,7 +1,7 @@
 {
-	"name": "@jsmart/jsmart-harness",
+	"name": "@jsmart/jsmart-memory",
 	"version": "0.0.1",
-	"description": "Custom coding agent harness",
+	"description": "Persistent memory system for jsmart agents",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
@@ -14,12 +14,12 @@
 		"build": "tsgo -p tsconfig.build.json",
 		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
 		"test": "vitest --run",
-		"test:session": "node --env-file=.env --import tsx test/agent-session.test.ts",
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"keywords": [
 		"ai",
 		"agent",
+		"memory",
 		"llm"
 	],
 	"author": "Jie",
@@ -27,19 +27,14 @@
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/openclaw-dev/jsmart-mono.git",
-		"directory": "packages/harness"
+		"directory": "packages/memory"
 	},
 	"engines": {
 		"node": ">=20.0.0"
 	},
 	"dependencies": {
-		"@jsmart/jsmart-agent-core": "^0.0.1",
 		"@jsmart/jsmart-ai": "^0.0.1",
-		"@jsmart/jsmart-memory": "^0.0.1",
-		"@sinclair/typebox": "^0.34.30",
-		"ajv": "^8.17.1",
-		"diff": "^8.0.2",
-		"yaml": "^2.8.0"
+		"@node-rs/jieba": "^2.0.1"
 	},
 	"devDependencies": {
 		"@types/node": "^24.3.0",

@@ -7,7 +7,7 @@
 	],
 	"scripts": {
 		"clean": "npm run clean --workspaces",
-		"build": "cd packages/ai && npm run build && cd ../agent && npm run build && cd ../harness && npm run build && cd ../gateway && npm run build && cd ../coding-agent && npm run build",
+		"build": "cd packages/ai && npm run build && cd ../agent && npm run build && cd ../memory && npm run build && cd ../harness && npm run build && cd ../gateway && npm run build && cd ../coding-agent && npm run build",
 		"dev": "concurrently --names \"ai,agent,gateway,coding\" --prefix-colors \"cyan,yellow,green,magenta\" \"cd packages/ai && npm run dev\" \"cd packages/agent && npm run dev\" \"cd packages/gateway && npm run dev\" \"cd packages/coding-agent && npm run dev\"",
 		"start:gateway": "cd packages/gateway && npm run start",
 		"start:coding": "cd packages/coding-agent && npm run start",
