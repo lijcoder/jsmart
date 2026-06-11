@@ -2,7 +2,7 @@ appId: com.jsmart.desktop
 productName: JSmart Desktop
 directories:
   buildResources: resources
-  output: release
+  output: dist/release
 files:
   - dist/**/*
   - package.json
