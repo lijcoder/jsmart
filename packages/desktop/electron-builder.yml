@@ -5,6 +5,7 @@ directories:
   output: dist/release
 files:
   - dist/**/*
+  - "!dist/release/**"
   - package.json
 mac:
   category: public.app-category.developer-tools
