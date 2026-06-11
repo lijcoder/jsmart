@@ -548,7 +548,6 @@ body {
 }
 
 .input-wrapper {
-	position: relative;
 	width: 100%;
 	max-width: min(760px, 90%);
 	background: #ffffff;
@@ -563,7 +562,7 @@ body {
 
 .chat-input textarea {
 	width: 100%;
-	padding: 6px 52px 6px 6px;
+	padding: 6px;
 	background: transparent;
 	border: none;
 	border-radius: 0;
@@ -583,31 +582,24 @@ body {
 	color: var(--text-muted);
 }
 
-.input-meta {
+/* ── Input Bottom Bar ───────────────────────────────────────── */
+
+.input-bar {
 	display: flex;
-	gap: 12px;
-	font-size: 11px;
+	align-items: center;
+	justify-content: space-between;
+	padding: 4px 6px 0;
+}
+
+.input-bar .input-project {
+	font-weight: 500;
+	font-size: 14px;
 	color: var(--text-muted);
-	padding: 0 6px;
-}
-
-.input-project {
-	font-weight: 500;
-	color: var(--text-secondary);
-}
-
-.input-status {
-	margin-left: auto;
-	color: var(--accent);
-	font-weight: 500;
 }
 
 .btn-send,
 .btn-abort {
-	position: absolute;
-	right: 10px;
-	top: 16px;
-	padding: 5px 14px;
+	padding: 4px 14px;
 	border: none;
 	border-radius: var(--radius);
 	cursor: pointer;
@@ -616,12 +608,18 @@ body {
 }
 
 .btn-send {
-	background: var(--accent);
+	background: var(--text-primary);
 	color: #fff;
 }
 
-.btn-send:hover {
-	background: var(--accent-hover);
+.btn-send:hover:not(:disabled) {
+	opacity: 0.85;
+}
+
+.btn-send:disabled {
+	background: var(--border);
+	color: var(--text-muted);
+	cursor: not-allowed;
 }
 
 .btn-abort {

@@ -339,7 +339,7 @@ export function App() {
 	};
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
-		if (e.key === "Enter" && !e.shiftKey && !composingRef.current) {
+		if (e.key === "Enter" && !e.shiftKey && !composingRef.current && input.trim()) {
 			e.preventDefault();
 			handleSend();
 		}
@@ -460,17 +460,17 @@ export function App() {
 									placeholder="Enter 发送，Shift+Enter 换行"
 									rows={2}
 								/>
-								{running ? (
-									<button type="button" className="btn-abort" onClick={handleAbort}>
-										停止
-									</button>
-								) : (
-									<button type="button" className="btn-send" onClick={handleSend}>
-											发送
-									</button>
-								)}
-								<div className="input-meta">
+								<div className="input-bar">
 									<span className="input-project">{activeProjectDir.split("/").pop() || activeProjectDir}</span>
+									{running ? (
+										<button type="button" className="btn-abort" onClick={handleAbort}>
+											停止
+										</button>
+									) : (
+										<button type="button" className="btn-send" onClick={handleSend} disabled={!input.trim()}>
+											发送
+										</button>
+									)}
 								</div>
 							</div>
 						</div>
