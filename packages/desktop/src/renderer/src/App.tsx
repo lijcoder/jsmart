@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AgentSessionEvent } from "@jsmart/jsmart-harness";
-import type { SessionInfo, SessionMeta } from "../../preload/index.js";
 import { type UIMessage, type UIContentBlock, type UIToolCall } from "./lib/types.js";
 import { MarkdownRenderer } from "./components/MarkdownRenderer.js";
 import { ToolCard } from "./components/ToolCard.js";
@@ -572,12 +570,6 @@ function ContentBlock({ block, isStreaming: _isStreaming }: { block: UIContentBl
 	}
 }
 
-// ── Event Handler ──────────────────────────────────────────────────
-
-function createBlocks(): UIContentBlock[] {
-	return [];
-}
-
 function addTextBlock(blocks: UIContentBlock[], delta: string): UIContentBlock[] {
 	const last = blocks[blocks.length - 1];
 	if (last?.type === "text") {
@@ -608,109 +600,4 @@ function updateToolBlock(blocks: UIContentBlock[], toolCallId: string, update: P
 	});
 }
 
-function handleEvent(
-	event: AgentSessionEvent,
-	streamingRef: React.MutableRefObject<UIMessage | null>,
-	setMessages: React.Dispatch<React.SetStateAction<UIMessage[]>>,
-	setRunning: React.Dispatch<React.SetStateAction<boolean>>,
-	setStatusText: React.Dispatch<React.SetStateAction<string>>,
-) {
-	switch (event.type) {
-		case "agent_start": {
-			setRunning(true);
-			setStatusText("Processing...");
-			streamingRef.current = { id: "streaming", role: "assistant", blocks: [] };
-			setMessages((prev) => [...prev]);
-			break;
-		}
 
-		case "message_update": {
-			const e = event.assistantMessageEvent;
-			const stream = streamingRef.current;
-			if (!stream) return;
-
-			let newBlocks = stream.blocks;
-			switch (e.type) {
-				case "text_delta":
-					newBlocks = addTextBlock(newBlocks, e.delta);
-					break;
-				case "thinking_delta":
-					newBlocks = addThinkingBlock(newBlocks, e.delta);
-					break;
-				case "toolcall_start": {
-					const tc = e.partial.content?.[e.contentIndex];
-					newBlocks = addToolBlock(newBlocks, {
-						id: tc?.type === "toolCall" ? tc.id : crypto.randomUUID(),
-						name: tc?.type === "toolCall" ? tc.name : "unknown",
-						args: tc?.type === "toolCall" ? (tc.arguments as Record<string, unknown>) ?? {} : {},
-						status: "pending",
-					});
-					break;
-				}
-				case "toolcall_end":
-					newBlocks = updateToolBlock(
-						// Update the last pending tool block
-						newBlocks.map((b, i) => {
-							if (b.type === "tool_call" && b.toolCall?.status === "pending") {
-								return {
-									...b,
-									toolCall: {
-										...b.toolCall,
-										name: e.toolCall.name,
-										id: e.toolCall.id,
-										args: (e.toolCall.arguments as Record<string, unknown>) ?? {},
-										status: "running" as const,
-									},
-								};
-							}
-							return b;
-						}),
-						"",
-						{},
-					);
-					break;
-			}
-			streamingRef.current = { ...stream, blocks: newBlocks };
-			// Trigger re-render to show new text
-			setMessages((prev) => [...prev]);
-			break;
-		}
-
-		case "tool_execution_start": {
-			const stream = streamingRef.current;
-			if (!stream) return;
-			streamingRef.current = {
-				...stream,
-				blocks: updateToolBlock(stream.blocks, event.toolCallId, { status: "running" }),
-			};
-			setMessages((prev) => [...prev]);
-			break;
-		}
-
-		case "tool_execution_end": {
-			const stream = streamingRef.current;
-			if (!stream) return;
-			streamingRef.current = {
-				...stream,
-				blocks: updateToolBlock(stream.blocks, event.toolCallId, {
-					status: event.isError ? "error" : "done",
-					result: event.result,
-				}),
-			};
-			setMessages((prev) => [...prev]);
-			break;
-		}
-
-		case "agent_end": {
-			const stream = streamingRef.current;
-			streamingRef.current = null;
-			setRunning(false);
-			setStatusText("Done");
-			setTimeout(() => setStatusText(""), 2000);
-			if (stream && stream.blocks.length > 0) {
-				setMessages((prev) => [...prev, { ...stream, id: crypto.randomUUID() }]);
-			}
-			break;
-		}
-	}
-}
