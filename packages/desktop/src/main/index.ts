@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, nativeImage, shell } from "electron";
 import { join } from "path";
 import { registerIpcHandlers } from "./ipc-handlers.js";
 import { SessionManager } from "./session-manager.js";
@@ -42,6 +42,10 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+	// Set dock icon — works in both dev and production
+	const iconPath = join(__dirname, "..", "..", "resources", "icon.png");
+	app.dock?.setIcon(nativeImage.createFromPath(iconPath));
+
 	registerIpcHandlers(sessionManager);
 	createWindow();
 

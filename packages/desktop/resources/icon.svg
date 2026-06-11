@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4f7cf7"/>
+      <stop offset="100%" stop-color="#7c5cf7"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- Stylized J letterform -->
+  <g transform="translate(512, 512)">
+    <!-- Main J stem + hook -->
+    <path d="M-120,-240 L-120,80 C-120,200 -40,260 60,260 L140,260 C180,260 200,240 200,200 L200,160 C200,120 180,100 140,100 L80,100 C40,100 0,120 0,180"
+          fill="none" stroke="#ffffff" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Crossbar at top -->
+    <line x1="-200" y1="-240" x2="-40" y2="-240" stroke="#ffffff" stroke-width="48" stroke-linecap="round"/>
+
+    <!-- Code brackets -->
+    <path d="M-260,-60 L-200,-30 L-260,0" fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+    <path d="M260,-60 L200,-30 L260,0" fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+  </g>
+</svg>
