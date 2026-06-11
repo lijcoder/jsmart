@@ -1,5 +1,5 @@
 import type { AgentSettings } from "@jsmart/jsmart-harness";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { join, resolve } from "path";
 
@@ -181,7 +181,7 @@ export function addSessionToIndex(workspace: string, sessionId: string, title: s
 	saveIndex(index);
 }
 
-/** Remove a session from the index */
+/** Remove a session from the index and delete its file */
 export function removeSessionFromIndex(sessionId: string): void {
 	const index = loadIndex();
 	for (const [ws, entries] of Object.entries(index.workspaces)) {
@@ -189,6 +189,18 @@ export function removeSessionFromIndex(sessionId: string): void {
 		if (index.workspaces[ws].length === 0) delete index.workspaces[ws];
 	}
 	saveIndex(index);
+
+	// Delete session file — walk all project hash dirs
+	const allSessionsRoot = getAllSessionsRoot();
+	if (!existsSync(allSessionsRoot)) return;
+	const sessionFile = `${sessionId}.jsonl`;
+	for (const dir of readdirSync(allSessionsRoot)) {
+		const filePath = join(allSessionsRoot, dir, sessionFile);
+		if (existsSync(filePath)) {
+			unlinkSync(filePath);
+			return;
+		}
+	}
 }
 
 /** Update a session title anywhere in the index */

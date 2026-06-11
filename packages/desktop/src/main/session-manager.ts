@@ -55,11 +55,12 @@ export class SessionManager {
 
 	delete(id: string): boolean {
 		const state = this.sessions.get(id);
-		if (!state) return false;
-		state.unsubscribe();
-		this.sessions.delete(id);
+		if (state) {
+			state.unsubscribe();
+			this.sessions.delete(id);
+		}
 		removeSessionFromIndex(id);
-		return true;
+		return !!state;
 	}
 
 	prompt(id: string, text: string): void {
