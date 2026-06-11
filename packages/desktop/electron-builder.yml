@@ -1,0 +1,20 @@
+appId: com.jsmart.desktop
+productName: JSmart Desktop
+directories:
+  buildResources: resources
+  output: release
+files:
+  - dist/**/*
+  - package.json
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+linux:
+  target:
+    - AppImage
+    - deb
+win:
+  target:
+    - nsis

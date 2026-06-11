@@ -22,5 +22,5 @@
 		}
 	},
 	"include": ["packages/*/src/**/*", "packages/*/test/**/*"],
-	"exclude": ["packages/harness-web/src/web/**/*", "**/dist/**"]
+	"exclude": ["packages/harness-web/src/web/**/*", "packages/desktop/**/*", "**/dist/**"]
 }

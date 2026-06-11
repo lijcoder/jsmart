@@ -1,0 +1,56 @@
+{
+	"name": "@jsmart/jsmart-desktop",
+	"version": "0.0.1",
+	"description": "Desktop application for JSmart coding agent with multi-session support",
+	"type": "module",
+	"main": "./dist/main/index.js",
+	"scripts": {
+		"dev": "electron-vite dev",
+		"dev:debug": "electron-vite dev --inspect 5858",
+		"build": "electron-vite build",
+		"preview": "electron-vite preview",
+		"start": "electron .",
+		"pack": "electron-builder --dir",
+		"dist": "electron-builder",
+		"dist:mac": "electron-builder --mac",
+		"dist:win": "electron-builder --win",
+		"dist:linux": "electron-builder --linux"
+	},
+	"keywords": [
+		"ai",
+		"agent",
+		"coding",
+		"desktop",
+		"electron"
+	],
+	"author": "Jie",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/openclaw-dev/jsmart-mono.git",
+		"directory": "packages/desktop"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"dependencies": {
+		"@jsmart/jsmart-ai": "^0.0.1",
+		"@jsmart/jsmart-harness": "^0.0.1"
+	},
+	"devDependencies": {
+		"@types/node": "^24.3.0",
+		"@types/react": "^19.0.0",
+		"@types/react-dom": "^19.0.0",
+		"@vitejs/plugin-react": "^4.3.0",
+		"electron": "^35.7.5",
+		"electron-builder": "^25.1.0",
+		"electron-vite": "^2.3.0",
+		"highlight.js": "^11.11.1",
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0",
+		"react-markdown": "^10.1.0",
+		"rehype-highlight": "^7.0.2",
+		"remark-gfm": "^4.0.1",
+		"typescript": "^5.7.3"
+	}
+}
