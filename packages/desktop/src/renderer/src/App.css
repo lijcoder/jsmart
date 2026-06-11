@@ -138,6 +138,29 @@ body {
 	border-radius: 8px;
 }
 
+.workspace-add-session {
+	margin-left: auto;
+	padding: 0 6px;
+	background: none;
+	border: none;
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: 16px;
+	font-weight: 400;
+	line-height: 1;
+	border-radius: 4px;
+	opacity: 0;
+	transition: opacity 0.1s, color 0.1s;
+}
+
+.workspace-header:hover .workspace-add-session {
+	opacity: 1;
+}
+
+.workspace-add-session:hover {
+	color: var(--accent);
+}
+
 .session-item {
 	display: flex;
 	align-items: center;

@@ -230,6 +230,16 @@ export function App() {
 		await refreshSavedSessions();
 	};
 
+	const handleCreateSessionInWorkspace = async (workspace: string) => {
+		const info = await window.jsmart.session.create(workspace);
+		sessionStatesRef.current.set(info.id, { messages: [], streaming: null, running: false });
+		setActiveId(info.id);
+		setActiveProjectDir(workspace);
+		setInput("");
+		userScrolledUpRef.current = false;
+		await refreshSavedSessions();
+	};
+
 	const handleSelectSavedSession = async (sessionId: string, workspace: string) => {
 		setActiveId(sessionId);
 		setActiveProjectDir(workspace);
@@ -353,15 +363,33 @@ export function App() {
 						const wsName = workspace.split("/").pop() || workspace;
 						return (
 							<div key={workspace} className="workspace-group">
-								<button
-									type="button"
+								<div
 									className="workspace-header"
 									onClick={() => toggleWorkspace(workspace)}
+									onKeyDown={(e) => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault();
+											toggleWorkspace(workspace);
+										}
+									}}
+									role="button"
+									tabIndex={0}
 								>
 									<span className="workspace-chevron">{isCollapsed ? "\u25B6" : "\u25BC"}</span>
 									<span className="workspace-name">{wsName}</span>
 									<span className="workspace-count">{sessions.length}</span>
-								</button>
+									<button
+										type="button"
+										className="workspace-add-session"
+										onClick={(e) => {
+											e.stopPropagation();
+											handleCreateSessionInWorkspace(workspace);
+										}}
+										title="New session in this workspace"
+									>
+										+
+									</button>
+								</div>
 								{!isCollapsed && sessions.map((s) => (
 										<div key={s.id} className={`session-item ${s.id === activeId ? "active" : ""}`}>
 											{editingSessionId === s.id ? (
