@@ -355,7 +355,7 @@ export function App() {
 		<div className="app">
 			<aside className="sidebar" ref={sidebarRef} style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
 				<button type="button" className="btn-new" onClick={handleCreateSession}>
-					+ New Session
+					+ 新建会话
 				</button>
 				<div className="session-list">
 					{[...workspaceGroups.entries()].map(([workspace, sessions]) => {
@@ -385,7 +385,7 @@ export function App() {
 											e.stopPropagation();
 											handleCreateSessionInWorkspace(workspace);
 										}}
-										title="New session in this workspace"
+										title="在此工作空间新建会话"
 									>
 										+
 									</button>
@@ -439,7 +439,7 @@ export function App() {
 						<div className="chat-messages" ref={chatMessagesRef}>
 							{displayMessages.length === 0 && !running && (
 								<div className="empty-state">
-									<p>Start a conversation with the coding agent.</p>
+									<p>开始与编程助手对话</p>
 								</div>
 							)}
 							{displayMessages.map((msg) => (
@@ -457,16 +457,16 @@ export function App() {
 									onKeyDown={handleKeyDown}
 									onCompositionStart={() => { composingRef.current = true; }}
 									onCompositionEnd={() => { composingRef.current = false; }}
-									placeholder="Enter to send, Shift+Enter for newline"
+									placeholder="Enter 发送，Shift+Enter 换行"
 									rows={2}
 								/>
 								{running ? (
 									<button type="button" className="btn-abort" onClick={handleAbort}>
-										Stop
+										停止
 									</button>
 								) : (
 									<button type="button" className="btn-send" onClick={handleSend}>
-										Send
+											发送
 									</button>
 								)}
 								<div className="input-meta">
@@ -477,8 +477,8 @@ export function App() {
 					</>
 				) : (
 					<div className="empty-state">
-						<h2>No session selected</h2>
-						<p>Create a new session or select one from the sidebar.</p>
+						<h2>未选择会话</h2>
+						<p>新建一个会话或从侧边栏选择已有会话</p>
 					</div>
 				)}
 			</main>
@@ -615,7 +615,7 @@ function ContentBlock({ block, isStreaming: _isStreaming }: { block: UIContentBl
 		case "thinking":
 			return block.text ? (
 				<details className="thinking-block">
-					<summary className="thinking-summary">Thinking...</summary>
+					<summary className="thinking-summary">思考中...</summary>
 					<div className="thinking-content">{block.text}</div>
 				</details>
 			) : null;

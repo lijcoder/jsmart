@@ -171,11 +171,11 @@ export function addSessionToIndex(workspace: string, sessionId: string, title: s
 	if (existing) {
 		existing.mtime = Date.now();
 		// Only update title if it's not the default placeholder
-		if (title && title !== "未命名" && title !== "New Session") {
+		if (title && title !== "未命名") {
 			existing.title = title;
 		}
 	} else {
-		entries.push({ id: sessionId, title: title || "New Session", mtime: Date.now() });
+		entries.push({ id: sessionId, title: title || "未命名", mtime: Date.now() });
 	}
 	index.workspaces[workspace] = entries;
 	saveIndex(index);
