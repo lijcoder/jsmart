@@ -576,6 +576,34 @@ function MessageBubble({ message }: { message: UIMessage }) {
 	);
 }
 
+const MAX_USER_TEXT_LENGTH = 200;
+const MAX_USER_TEXT_LINES = 3;
+
+function UserTextBlock({ text }: { text: string }) {
+	const [expanded, setExpanded] = useState(false);
+	const lineCount = text.split("\n").length;
+	const needsTruncation = text.length > MAX_USER_TEXT_LENGTH || lineCount > MAX_USER_TEXT_LINES;
+
+	if (!needsTruncation) {
+		return <div className="user-text">{text}</div>;
+	}
+
+	return (
+		<div className="user-text">
+			<div className={expanded ? "user-text-expanded" : "user-text-clamped"}>
+				{text}
+			</div>
+			<button
+				type="button"
+				className="user-text-toggle"
+				onClick={() => setExpanded(!expanded)}
+			>
+				{expanded ? "收起" : "展开全部"}
+			</button>
+		</div>
+	);
+}
+
 function ContentBlock({ block, isStreaming: _isStreaming }: { block: UIContentBlock; isStreaming: boolean }) {
 	switch (block.type) {
 		case "text":
@@ -583,7 +611,7 @@ function ContentBlock({ block, isStreaming: _isStreaming }: { block: UIContentBl
 			return <MarkdownRenderer content={block.text} />;
 		case "user_text":
 			if (!block.text) return null;
-			return <div className="user-text">{block.text}</div>;
+			return <UserTextBlock text={block.text} />;
 		case "thinking":
 			return block.text ? (
 				<details className="thinking-block">

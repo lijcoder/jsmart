@@ -403,6 +403,33 @@ body {
 	word-break: break-word;
 }
 
+.user-text-clamped {
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.user-text-expanded {
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.user-text-toggle {
+	margin-top: 4px;
+	padding: 2px 0;
+	background: none;
+	border: none;
+	color: var(--accent);
+	cursor: pointer;
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.user-text-toggle:hover {
+	opacity: 0.8;
+}
+
 /* ── Code Blocks ────────────────────────────────────────────── */
 
 .code-block {
