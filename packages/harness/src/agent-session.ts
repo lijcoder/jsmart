@@ -128,12 +128,26 @@ export class AgentSession {
 		const defaultModel = settingsManager.getDefaultModel();
 		this.providerName = defaultModel?.provider ?? "";
 		this.modelName = defaultModel?.model ?? "";
-		const model: Model<Api> | undefined = this.modelManager.find(this.providerName, this.modelName);
+		let model: Model<Api> | undefined = this.modelManager.find(this.providerName, this.modelName);
 		const { messages } = this.sessionManager.buildSessionContext();
+
+		// Restore last saved model / thinking level from session file
+		const lastModel = this.sessionManager.loadLatestModelChange();
+		if (lastModel) {
+			this.providerName = lastModel.provider;
+			this.modelName = lastModel.modelId;
+			model = this.modelManager.find(this.providerName, this.modelName) ?? model;
+		}
+		const lastThinkingLevel = this.sessionManager.loadLatestThinkingLevel();
+
 		this.agent = new Agent({
 			initialState: {
 				model: model,
-				thinkingLevel: defaultModel?.thinkingLevel ?? "off",
+				thinkingLevel: (lastThinkingLevel ?? defaultModel?.thinkingLevel ?? "off") as
+					| "off"
+					| "low"
+					| "medium"
+					| "high",
 				messages: messages,
 			},
 			toolExecution: "sequential",
@@ -435,8 +449,18 @@ export class AgentSession {
 			this.providerName = providerName;
 			this.modelName = modelName;
 			this.agent.state.model = model;
+			this.sessionManager.saveModelChange(providerName, modelName);
 			return { isSuccess: true };
 		}
+	}
+
+	setThinkingLevel(level: "off" | "low" | "medium" | "high"): void {
+		this.agent.state.thinkingLevel = level;
+		this.sessionManager.saveThinkingLevelChange(level);
+	}
+
+	getThinkingLevel(): string {
+		return this.agent.state.thinkingLevel;
 	}
 
 	getAllModelName(): string[] {

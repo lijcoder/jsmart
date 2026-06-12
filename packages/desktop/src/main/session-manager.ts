@@ -82,6 +82,18 @@ export class SessionManager {
 		return { success: result.isSuccess, error: result.error };
 	}
 
+	setThinkingLevel(id: string, level: string): boolean {
+		const state = this.sessions.get(id);
+		if (!state) return false;
+		state.agentSession.setThinkingLevel(level as "off" | "low" | "medium" | "high");
+		return true;
+	}
+
+	getThinkingLevel(id: string): string {
+		const state = this.sessions.get(id);
+		return state?.agentSession.getThinkingLevel() ?? "off";
+	}
+
 	getInfo(id: string): SessionInfo | null {
 		const state = this.sessions.get(id);
 		if (!state) return null;

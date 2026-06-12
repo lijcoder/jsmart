@@ -39,6 +39,9 @@ export function App() {
 	const [models, setModels] = useState<ModelInfo[]>([]);
 	const [currentModelId, setCurrentModelId] = useState<string>("");
 	const [showModelPicker, setShowModelPicker] = useState(false);
+	const [thinkingLevel, setThinkingLevel] = useState("off");
+	const [showThinkingPicker, setShowThinkingPicker] = useState(false);
+	const thinkingPickerRef = useRef<HTMLDivElement>(null);
 	const modelPickerRef = useRef<HTMLDivElement>(null);
 
 	const startEditTitle = (sessionId: string, currentTitle: string) => {
@@ -250,10 +253,12 @@ export function App() {
 		setActiveId(info.id);
 		setActiveProjectDir(dir);
 		setCurrentModelId(info.model);
+		setThinkingLevel(await window.jsmart.session.getThinkingLevel(info.id));
 		setInput("");
 		userScrolledUpRef.current = false;
 		await refreshSavedSessions();
 		await loadModels();
+		setThinkingLevel(await window.jsmart.session.getThinkingLevel(sessionId));
 	};
 
 	const handleCreateSessionInWorkspace = async (workspace: string) => {
@@ -262,6 +267,7 @@ export function App() {
 		setActiveId(info.id);
 		setActiveProjectDir(workspace);
 		setCurrentModelId(info.model);
+		setThinkingLevel(await window.jsmart.session.getThinkingLevel(info.id));
 		setInput("");
 		userScrolledUpRef.current = false;
 		await refreshSavedSessions();
@@ -284,6 +290,7 @@ export function App() {
 			if (info) setCurrentModelId(info.model);
 		}
 		await loadModels();
+		setThinkingLevel(await window.jsmart.session.getThinkingLevel(sessionId));
 
 		const state = sessionStatesRef.current.get(sessionId)!;
 		if (state.messages.length === 0 && !state.streaming) {
@@ -387,15 +394,33 @@ export function App() {
 
 	// Close model picker on outside click
 	useEffect(() => {
-		if (!showModelPicker) return;
+		if (!showModelPicker && !showThinkingPicker) return;
 		const handler = (e: MouseEvent) => {
-			if (modelPickerRef.current && !modelPickerRef.current.contains(e.target as Node)) {
+			if (
+				showModelPicker &&
+				modelPickerRef.current &&
+				!modelPickerRef.current.contains(e.target as Node)
+			) {
 				setShowModelPicker(false);
+			}
+			if (
+				showThinkingPicker &&
+				thinkingPickerRef.current &&
+				!thinkingPickerRef.current.contains(e.target as Node)
+			) {
+				setShowThinkingPicker(false);
 			}
 		};
 		document.addEventListener("mousedown", handler);
 		return () => document.removeEventListener("mousedown", handler);
-	}, [showModelPicker]);
+	}, [showModelPicker, showThinkingPicker]);
+
+	const setThinking = async (level: string) => {
+		if (!activeId) return;
+		await window.jsmart.session.setThinkingLevel(activeId, level);
+		setThinkingLevel(level);
+		setShowThinkingPicker(false);
+	};
 
 	const handleChange = (value: string) => {
 		setInput(value);
@@ -641,6 +666,31 @@ export function App() {
 								<div className="input-bar">
 									<span className="input-project">{activeProjectDir.split("/").pop() || activeProjectDir}</span>
 									<div className="input-bar-right">
+										<div className="thinking-picker" ref={thinkingPickerRef}>
+											<button
+												type="button"
+												className="model-picker-btn"
+												onClick={() => setShowThinkingPicker(!showThinkingPicker)}
+											>
+												thinking: {thinkingLevel}
+											</button>
+											{showThinkingPicker && (
+												<div className="model-dropdown">
+													{(["off", "low", "medium", "high"] as const).map((level) => (
+														<button
+															type="button"
+															key={level}
+															className={`model-option ${level === thinkingLevel ? "model-option-active" : ""}`}
+															onClick={() => setThinking(level)}
+														>
+															<span className="model-option-name">
+																{level === "off" ? "off" : level}
+															</span>
+														</button>
+													))}
+												</div>
+											)}
+										</div>
 										<div className="model-picker" ref={modelPickerRef}>
 											<button
 												type="button"

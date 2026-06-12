@@ -25,6 +25,8 @@ export interface JSmartAPI {
 		changeModel: (id: string, provider: string, model: string) => Promise<{ success: boolean; error?: string }>;
 		getInfo: (id: string) => Promise<SessionInfo | null>;
 		getModels: () => Promise<ModelInfo[]>;
+		setThinkingLevel: (id: string, level: string) => Promise<boolean>;
+		getThinkingLevel: (id: string) => Promise<string>;
 		onEvent: (callback: (sessionId: string, event: AgentSessionEvent) => void) => () => void;
 	};
 	app: {
@@ -51,6 +53,8 @@ const api: JSmartAPI = {
 			ipcRenderer.invoke("session:changeModel", id, provider, model),
 		getInfo: (id: string) => ipcRenderer.invoke("session:getInfo", id),
 		getModels: () => ipcRenderer.invoke("session:getModels"),
+		setThinkingLevel: (id: string, level: string) => ipcRenderer.invoke("session:setThinkingLevel", id, level),
+		getThinkingLevel: (id: string) => ipcRenderer.invoke("session:getThinkingLevel", id),
 		onEvent: (callback: (sessionId: string, event: AgentSessionEvent) => void) => {
 			const handler = (_event: Electron.IpcRendererEvent, sessionId: string, e: AgentSessionEvent) => {
 				callback(sessionId, e);

@@ -51,6 +51,14 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
 		return sessionManager.getModels();
 	});
 
+	ipcMain.handle("session:setThinkingLevel", async (_event, id: string, level: string) => {
+		return sessionManager.setThinkingLevel(id, level);
+	});
+
+	ipcMain.handle("session:getThinkingLevel", async (_event, id: string) => {
+		return sessionManager.getThinkingLevel(id);
+	});
+
 	// ── App ─────────────────────────────────────────────────────
 
 	ipcMain.handle("app:selectProject", async () => {

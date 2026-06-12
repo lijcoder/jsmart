@@ -269,6 +269,58 @@ export class SessionManager {
 		return entry.id;
 	}
 
+	/**
+	 * Persist a model change to the session file.
+	 */
+	saveModelChange(provider: string, modelId: string): void {
+		const entry: ModelChangeEntry = {
+			type: "model_change",
+			id: generateId(this.leafId),
+			parentId: this.leafId,
+			timestamp: new Date().toISOString(),
+			provider,
+			modelId,
+		};
+		this._appendEntry(entry);
+	}
+
+	/**
+	 * Persist a thinking level change to the session file.
+	 */
+	saveThinkingLevelChange(level: string): void {
+		const entry: ThinkingLevelChangeEntry = {
+			type: "thinking_level_change",
+			id: generateId(this.leafId),
+			parentId: this.leafId,
+			timestamp: new Date().toISOString(),
+			thinkingLevel: level,
+		};
+		this._appendEntry(entry);
+	}
+
+	/** Load the last model change from the file, if any. */
+	loadLatestModelChange(): { provider: string; modelId: string } | null {
+		const entries = this.getEntries();
+		for (let i = entries.length - 1; i >= 0; i--) {
+			if (entries[i].type === "model_change") {
+				const e = entries[i] as ModelChangeEntry;
+				return { provider: e.provider, modelId: e.modelId };
+			}
+		}
+		return null;
+	}
+
+	/** Load the last thinking level change from the file, if any. */
+	loadLatestThinkingLevel(): string | null {
+		const entries = this.getEntries();
+		for (let i = entries.length - 1; i >= 0; i--) {
+			if (entries[i].type === "thinking_level_change") {
+				return (entries[i] as ThinkingLevelChangeEntry).thinkingLevel;
+			}
+		}
+		return null;
+	}
+
 	/** Append a compaction summary as child of current leaf, then advance leaf. Returns entry id. */
 	appendCompaction(summary: string, firstKeptEntryId: string, tokensBefore: number): string {
 		const entry: CompactionEntry = {

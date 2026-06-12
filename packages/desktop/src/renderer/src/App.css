@@ -739,12 +739,17 @@ li code,
 	color: var(--text-secondary);
 }
 
+.thinking-picker {
+	position: relative;
+	flex-shrink: 0;
+}
+
 .model-dropdown {
 	position: absolute;
 	right: 0;
 	bottom: 100%;
 	margin-bottom: 4px;
-	min-width: 220px;
+	min-width: 0;
 	max-height: 220px;
 	overflow-y: auto;
 	background: var(--bg-primary);
