@@ -1,6 +1,6 @@
 import type { AgentTool, StreamFn } from "@jsmart/jsmart-agent-core";
 import { Agent, type AgentEvent, type AgentMessage } from "@jsmart/jsmart-agent-core";
-import type { Api, AssistantMessage, Model } from "@jsmart/jsmart-ai";
+import type { Api, AssistantMessage, Model, Usage } from "@jsmart/jsmart-ai";
 import { isContextOverflow } from "@jsmart/jsmart-ai";
 import { MemoryManager } from "@jsmart/jsmart-memory";
 import {
@@ -393,8 +393,27 @@ export class AgentSession {
 			return true;
 		}
 		if (text === "/tokens") {
-			const msg = `Context tokens: ${this.getContextTokens()}`;
-			this._emit({ type: "slash_command", name: "tokens", message: msg });
+			const messages = this.agent.state.messages;
+			let lastUsage: Usage | null = null;
+			for (let i = messages.length - 1; i >= 0; i--) {
+				const m = messages[i] as { role: string; usage?: Usage };
+				if (m.role === "assistant" && m.usage) {
+					lastUsage = m.usage;
+					break;
+				}
+			}
+
+			const parts = [`context: ${this.getContextTokens()}`];
+			if (lastUsage) {
+				parts.push(
+					`input: ${lastUsage.input}  output: ${lastUsage.output}  total: ${lastUsage.totalTokens}`,
+					`cacheRead: ${lastUsage.cacheRead}  cacheWrite: ${lastUsage.cacheWrite}`,
+				);
+			} else {
+				parts.push("(no usage data)");
+			}
+
+			this._emit({ type: "slash_command", name: "tokens", message: parts.join("\n") });
 			return true;
 		}
 		if (text === "/prompt") {
