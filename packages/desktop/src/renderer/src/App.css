@@ -544,6 +544,7 @@ body {
 }
 
 .input-wrapper {
+	position: relative;
 	width: 100%;
 	max-width: min(760px, 90%);
 	background: #ffffff;
@@ -669,4 +670,59 @@ body {
 .scroll-bottom-btn:hover {
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 	color: var(--text-primary);
+}
+
+/* ── Slash Command Menu ──────────────────────────────────────── */
+
+.slash-menu {
+	position: absolute;
+	bottom: 100%;
+	left: 0;
+	right: 0;
+	margin-bottom: 4px;
+	background: #ffffff;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+	max-height: 240px;
+	overflow-y: auto;
+	z-index: 10;
+	padding: 4px;
+}
+
+.slash-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 8px 10px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	cursor: pointer;
+	font-size: 13px;
+	text-align: left;
+	color: var(--text-primary);
+}
+
+.slash-menu-item:hover,
+.slash-menu-item.selected {
+	background: var(--bg-secondary);
+}
+
+.slash-menu-name {
+	font-family: "SF Mono", Menlo, Monaco, "Cascadia Code", monospace;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--accent);
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+.slash-menu-desc {
+	color: var(--text-secondary);
+	font-size: 12px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }

@@ -3,6 +3,22 @@ import { type UIMessage, type UIContentBlock, type UIToolCall } from "./lib/type
 import { MarkdownRenderer } from "./components/MarkdownRenderer.js";
 import { ToolCard } from "./components/ToolCard.js";
 
+interface SlashCommand {
+	name: string;
+	description: string;
+}
+
+const SLASH_COMMANDS: SlashCommand[] = [
+	{ name: "/abort", description: "中止当前运行" },
+	{ name: "/model", description: "显示当前模型" },
+	{ name: "/models", description: "列出可用模型" },
+	{ name: "/model set ", description: "切换模型 — /model set provider/model" },
+	{ name: "/workspace", description: "显示当前工作区路径" },
+	{ name: "/session", description: "显示会话文件路径" },
+	{ name: "/tokens", description: "显示上下文 token 数" },
+	{ name: "/prompt", description: "显示系统提示词" },
+];
+
 interface SavedSession {
 	id: string;
 	workspace: string;
@@ -63,6 +79,14 @@ export function App() {
 	>(new Map());
 	const [, setTick] = useState(0);
 	const forceRender = () => setTick((t) => t + 1);
+
+	// Slash command menu
+	const [slashIndex, setSlashIndex] = useState(0);
+	const slashFilter = input.startsWith("/") ? input.slice(1).toLowerCase() : "";
+	const filteredCommands = slashFilter
+		? SLASH_COMMANDS.filter((c) => c.name.toLowerCase().includes(slashFilter) || c.description.toLowerCase().includes(slashFilter))
+		: SLASH_COMMANDS;
+	const slashMenuOpen = input.startsWith("/") && filteredCommands.length > 0;
 
 	const activeState = activeId ? sessionStatesRef.current.get(activeId) : null;
 	const messages = activeState?.messages ?? [];
@@ -333,7 +357,71 @@ export function App() {
 		await window.jsmart.session.abort(activeId);
 	};
 
+	const handleChange = (value: string) => {
+		setInput(value);
+		setSlashIndex(0);
+	};
+
+	const fillSlashCommand = (cmd: SlashCommand) => {
+		setInput(cmd.name);
+		setSlashIndex(0);
+		textareaRef.current?.focus();
+	};
+
+	const sendSlashCommand = (cmd: SlashCommand) => {
+		// Need to use the cmd.name directly, not from state (input state is async)
+		const text = cmd.name;
+		if (!activeId) return;
+		const state = sessionStatesRef.current.get(activeId);
+		if (!state || state.running) return;
+
+		userScrolledUpRef.current = false;
+		setInput("");
+		setSlashIndex(0);
+		if (textareaRef.current) {
+			textareaRef.current.value = "";
+		}
+		state.messages = [...state.messages, { id: crypto.randomUUID(), role: "user", blocks: [{ type: "user_text", text }] }];
+
+		const currentTitle = savedSessions.find((s) => s.id === activeId)?.title;
+		if (state.messages.length === 1 && (!currentTitle || currentTitle === "未命名")) {
+			window.jsmart.app.updateTitle(activeId, text.slice(0, 50));
+			refreshSavedSessions();
+		}
+
+		window.jsmart.session.prompt(activeId, text);
+		forceRender();
+	};
+
 	const handleKeyDown = (e: React.KeyboardEvent) => {
+		if (slashMenuOpen) {
+			if (e.key === "ArrowDown") {
+				e.preventDefault();
+				setSlashIndex((i) => (i + 1) % filteredCommands.length);
+				return;
+			}
+			if (e.key === "ArrowUp") {
+				e.preventDefault();
+				setSlashIndex((i) => (i - 1 + filteredCommands.length) % filteredCommands.length);
+				return;
+			}
+			if (e.key === "Tab") {
+				e.preventDefault();
+				fillSlashCommand(filteredCommands[slashIndex]);
+				return;
+			}
+			if (e.key === "Enter" && !e.shiftKey) {
+				e.preventDefault();
+				sendSlashCommand(filteredCommands[slashIndex]);
+				return;
+			}
+			if (e.key === "Escape") {
+				e.preventDefault();
+				setInput("");
+				setSlashIndex(0);
+				return;
+			}
+		}
 		if (e.key === "Enter" && !e.shiftKey && !composingRef.current && input.trim()) {
 			e.preventDefault();
 			handleSend();
@@ -470,13 +558,31 @@ export function App() {
 								<textarea
 									ref={textareaRef}
 									value={input}
-									onChange={(e) => setInput(e.target.value)}
+									onChange={(e) => handleChange(e.target.value)}
 									onKeyDown={handleKeyDown}
 									onCompositionStart={() => { composingRef.current = true; }}
 									onCompositionEnd={() => { composingRef.current = false; }}
-									placeholder="Enter 发送，Shift+Enter 换行"
+									placeholder="输入 / 查看命令，Enter 发送，Shift+Enter 换行"
 									rows={2}
 								/>
+								{slashMenuOpen && (
+									<div className="slash-menu">
+										{filteredCommands.map((cmd, i) => (
+											<button
+												key={cmd.name}
+												type="button"
+												className={`slash-menu-item${i === slashIndex ? " selected" : ""}`}
+												onMouseDown={(e) => {
+													e.preventDefault();
+													sendSlashCommand(cmd);
+												}}
+											>
+												<span className="slash-menu-name">{cmd.name}</span>
+												<span className="slash-menu-desc">{cmd.description}</span>
+											</button>
+										))}
+									</div>
+								)}
 								<div className="input-bar">
 									<span className="input-project">{activeProjectDir.split("/").pop() || activeProjectDir}</span>
 									{running ? (
