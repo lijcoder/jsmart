@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ModelInfo } from "../../preload/index.js";
 import { type UIMessage, type UIContentBlock, type UIToolCall } from "./lib/types.js";
 import { MarkdownRenderer } from "./components/MarkdownRenderer.js";
 import { ToolCard } from "./components/ToolCard.js";
@@ -35,6 +36,10 @@ export function App() {
 	const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Set<string>>(new Set());
 	const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
 	const [editTitle, setEditTitle] = useState("");
+	const [models, setModels] = useState<ModelInfo[]>([]);
+	const [currentModelId, setCurrentModelId] = useState<string>("");
+	const [showModelPicker, setShowModelPicker] = useState(false);
+	const modelPickerRef = useRef<HTMLDivElement>(null);
 
 	const startEditTitle = (sessionId: string, currentTitle: string) => {
 		setEditingSessionId(sessionId);
@@ -244,9 +249,11 @@ export function App() {
 		sessionStatesRef.current.set(info.id, { messages: [], streaming: null, running: false });
 		setActiveId(info.id);
 		setActiveProjectDir(dir);
+		setCurrentModelId(info.model);
 		setInput("");
 		userScrolledUpRef.current = false;
 		await refreshSavedSessions();
+		await loadModels();
 	};
 
 	const handleCreateSessionInWorkspace = async (workspace: string) => {
@@ -254,9 +261,11 @@ export function App() {
 		sessionStatesRef.current.set(info.id, { messages: [], streaming: null, running: false });
 		setActiveId(info.id);
 		setActiveProjectDir(workspace);
+		setCurrentModelId(info.model);
 		setInput("");
 		userScrolledUpRef.current = false;
 		await refreshSavedSessions();
+		await loadModels();
 	};
 
 	const handleSelectSavedSession = async (sessionId: string, workspace: string) => {
@@ -268,8 +277,13 @@ export function App() {
 		const needsCreate = !sessionStatesRef.current.has(sessionId);
 		if (needsCreate) {
 			sessionStatesRef.current.set(sessionId, { messages: [], streaming: null, running: false });
-			await window.jsmart.session.create(workspace, sessionId);
+			const info = await window.jsmart.session.create(workspace, sessionId);
+			setCurrentModelId(info.model);
+		} else {
+			const info = await window.jsmart.session.getInfo(sessionId);
+			if (info) setCurrentModelId(info.model);
 		}
+		await loadModels();
 
 		const state = sessionStatesRef.current.get(sessionId)!;
 		if (state.messages.length === 0 && !state.streaming) {
@@ -356,6 +370,32 @@ export function App() {
 		if (!activeId) return;
 		await window.jsmart.session.abort(activeId);
 	};
+
+	const loadModels = useCallback(async () => {
+		const list = await window.jsmart.session.getModels();
+		setModels(list);
+	}, []);
+
+	const switchModel = async (modelId: string, provider: string) => {
+		if (!activeId) return;
+		const result = await window.jsmart.session.changeModel(activeId, provider, modelId);
+		if (result.success) {
+			setCurrentModelId(`${provider}/${modelId}`);
+			setShowModelPicker(false);
+		}
+	};
+
+	// Close model picker on outside click
+	useEffect(() => {
+		if (!showModelPicker) return;
+		const handler = (e: MouseEvent) => {
+			if (modelPickerRef.current && !modelPickerRef.current.contains(e.target as Node)) {
+				setShowModelPicker(false);
+			}
+		};
+		document.addEventListener("mousedown", handler);
+		return () => document.removeEventListener("mousedown", handler);
+	}, [showModelPicker]);
 
 	const handleChange = (value: string) => {
 		setInput(value);
@@ -600,15 +640,41 @@ export function App() {
 								)}
 								<div className="input-bar">
 									<span className="input-project">{activeProjectDir.split("/").pop() || activeProjectDir}</span>
-									{running ? (
-										<button type="button" className="btn-abort" onClick={handleAbort}>
-											停止
-										</button>
-									) : (
-										<button type="button" className="btn-send" onClick={handleSend} disabled={!input.trim()}>
-											发送
-										</button>
-									)}
+									<div className="input-bar-right">
+										<div className="model-picker" ref={modelPickerRef}>
+											<button
+												type="button"
+												className="model-picker-btn"
+												onClick={() => models.length > 0 && setShowModelPicker(!showModelPicker)}
+											>
+												{currentModelId ? currentModelId : "..."}
+											</button>
+											{showModelPicker && models.length > 0 && (
+												<div className="model-dropdown">
+													{models.map((m) => (
+														<button
+															type="button"
+															key={`${m.provider}/${m.id}`}
+															className={`model-option ${`${m.provider}/${m.id}` === currentModelId ? "model-option-active" : ""}`}
+															onClick={() => switchModel(m.id, m.provider)}
+														>
+															<span className="model-option-name">{m.id}</span>
+															<span className="model-option-provider">{m.provider}</span>
+														</button>
+													))}
+												</div>
+											)}
+										</div>
+										{running ? (
+											<button type="button" className="btn-abort" onClick={handleAbort}>
+												停止
+											</button>
+										) : (
+											<button type="button" className="btn-send" onClick={handleSend} disabled={!input.trim()}>
+												发送
+											</button>
+										)}
+									</div>
 								</div>
 							</div>
 						</div>

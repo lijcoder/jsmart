@@ -9,6 +9,12 @@ export interface SessionMeta {
 	hash: string;
 }
 
+export interface ModelInfo {
+	id: string;
+	name: string;
+	provider: string;
+}
+
 export interface JSmartAPI {
 	session: {
 		create: (projectDir?: string, sessionId?: string) => Promise<SessionInfo>;
@@ -18,6 +24,7 @@ export interface JSmartAPI {
 		abort: (id: string) => Promise<void>;
 		changeModel: (id: string, provider: string, model: string) => Promise<{ success: boolean; error?: string }>;
 		getInfo: (id: string) => Promise<SessionInfo | null>;
+		getModels: () => Promise<ModelInfo[]>;
 		onEvent: (callback: (sessionId: string, event: AgentSessionEvent) => void) => () => void;
 	};
 	app: {
@@ -43,6 +50,7 @@ const api: JSmartAPI = {
 		changeModel: (id: string, provider: string, model: string) =>
 			ipcRenderer.invoke("session:changeModel", id, provider, model),
 		getInfo: (id: string) => ipcRenderer.invoke("session:getInfo", id),
+		getModels: () => ipcRenderer.invoke("session:getModels"),
 		onEvent: (callback: (sessionId: string, event: AgentSessionEvent) => void) => {
 			const handler = (_event: Electron.IpcRendererEvent, sessionId: string, e: AgentSessionEvent) => {
 				callback(sessionId, e);

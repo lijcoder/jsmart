@@ -47,6 +47,10 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
 		return sessionManager.getInfo(id);
 	});
 
+	ipcMain.handle("session:getModels", async () => {
+		return sessionManager.getModels();
+	});
+
 	// ── App ─────────────────────────────────────────────────────
 
 	ipcMain.handle("app:selectProject", async () => {

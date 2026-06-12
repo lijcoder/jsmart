@@ -122,4 +122,15 @@ export class SessionManager {
 		}
 		return map;
 	}
+
+	getModels(): { id: string; name: string; provider: string }[] {
+		for (const state of this.sessions.values()) {
+			return state.agentSession.getModels().map((m) => ({
+				id: m.id,
+				name: m.name,
+				provider: m.provider,
+			}));
+		}
+		return [];
+	}
 }

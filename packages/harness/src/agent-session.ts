@@ -447,6 +447,10 @@ export class AgentSession {
 		return modelNames;
 	}
 
+	getModels(): Model<Api>[] {
+		return this.modelManager.getAll();
+	}
+
 	getSessionFilePath(): string | undefined {
 		return this.sessionManager.getSessionFile();
 	}
