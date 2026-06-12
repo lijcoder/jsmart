@@ -129,6 +129,7 @@ export interface SessionMeta {
 	workspace: string;
 	title: string;
 	mtime: number;
+	hash: string;
 }
 
 export interface SessionIndex {
@@ -139,6 +140,7 @@ interface SessionEntry {
 	id: string;
 	title: string;
 	mtime: number;
+	hash?: string;
 }
 
 const INDEX_FILE = "sessions.json";
@@ -175,7 +177,12 @@ export function addSessionToIndex(workspace: string, sessionId: string, title: s
 			existing.title = title;
 		}
 	} else {
-		entries.push({ id: sessionId, title: title || "未命名", mtime: Date.now() });
+		entries.push({
+			id: sessionId,
+			title: title || "未命名",
+			mtime: Date.now(),
+			hash: simpleHash(workspace),
+		});
 	}
 	index.workspaces[workspace] = entries;
 	saveIndex(index);
@@ -232,6 +239,7 @@ export function listAllSessions(): SessionMeta[] {
 				workspace,
 				title: e.title,
 				mtime: e.mtime,
+				hash: e.hash ?? simpleHash(workspace),
 			});
 		}
 	}

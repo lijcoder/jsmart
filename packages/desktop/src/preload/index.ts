@@ -6,6 +6,7 @@ export interface SessionMeta {
 	workspace: string;
 	title: string;
 	mtime: number;
+	hash: string;
 }
 
 export interface JSmartAPI {
