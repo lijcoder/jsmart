@@ -9,3 +9,4 @@
 
 ### Fixed
 - Slash commands (`/model`, `/workspace`, `/session`, etc.) now display output in the chat
+- Slash command output containing nested code fences no longer breaks code block rendering

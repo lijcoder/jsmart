@@ -223,7 +223,7 @@ export function App() {
 						{
 							id: crypto.randomUUID(),
 							role: "assistant" as const,
-							blocks: [{ type: "text" as const, text: `\`\`\`\n${event.message}\n\`\`\`` }],
+							blocks: [{ type: "text" as const, text: event.message.split("\n").map((line) => `    ${line}`).join("\n") }],
 						},
 					];
 					break;
