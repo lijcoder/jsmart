@@ -360,7 +360,22 @@ export function App() {
 	const handleChange = (value: string) => {
 		setInput(value);
 		setSlashIndex(0);
+		autoResize();
 	};
+
+	const autoResize = () => {
+		const ta = textareaRef.current;
+		if (!ta) return;
+		ta.style.height = "auto";
+		ta.style.height = `${Math.min(ta.scrollHeight, 126)}px`;
+	};
+
+	// Auto-resize when input is cleared (e.g. after send)
+	useEffect(() => {
+		if (!input && textareaRef.current) {
+			textareaRef.current.style.height = "";
+		}
+	}, [input]);
 
 	const fillSlashCommand = (cmd: SlashCommand) => {
 		setInput(cmd.name);

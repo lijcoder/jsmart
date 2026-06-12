@@ -13,6 +13,7 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
 		const info = sessionManager.create(
 			dir,
 			(sessionId, event) => {
+				if (senderWindow.isDestroyed() || senderWindow.webContents.isDestroyed()) return;
 				senderWindow.webContents.send("session:event", sessionId, event);
 			},
 			sessionId,
