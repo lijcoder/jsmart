@@ -192,6 +192,17 @@ export function App() {
 					}
 					break;
 				}
+
+				case "slash_command":
+					state.messages = [
+						...state.messages,
+						{
+							id: crypto.randomUUID(),
+							role: "assistant" as const,
+							blocks: [{ type: "text" as const, text: `\`\`\`\n${event.message}\n\`\`\`` }],
+						},
+					];
+					break;
 			}
 
 			// Trigger re-render if this is the active session
