@@ -57,6 +57,7 @@ function createWindow(): void {
 		minWidth: 800,
 		minHeight: 600,
 		title: "JSmart Desktop",
+		titleBarStyle: "hidden",
 		webPreferences: {
 			preload: join(__dirname, "../preload/index.mjs"),
 			sandbox: false,

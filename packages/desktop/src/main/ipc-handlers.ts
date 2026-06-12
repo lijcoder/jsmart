@@ -68,4 +68,28 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
 	ipcMain.handle("app:updateTitle", async (_event, sessionId: string, title: string) => {
 		updateSessionTitle(sessionId, title);
 	});
+
+	// ── Window Controls ──────────────────────────────────────────
+
+	ipcMain.handle("app:minimize", async (_event) => {
+		BrowserWindow.fromWebContents(_event.sender)?.minimize();
+	});
+
+	ipcMain.handle("app:maximize", async (_event) => {
+		const win = BrowserWindow.fromWebContents(_event.sender);
+		if (!win) return;
+		if (win.isMaximized()) {
+			win.unmaximize();
+		} else {
+			win.maximize();
+		}
+	});
+
+	ipcMain.handle("app:close", async (_event) => {
+		BrowserWindow.fromWebContents(_event.sender)?.close();
+	});
+
+	ipcMain.handle("app:isMaximized", async (_event) => {
+		return BrowserWindow.fromWebContents(_event.sender)?.isMaximized() ?? false;
+	});
 }

@@ -25,6 +25,11 @@ export interface JSmartAPI {
 		listSessions: () => Promise<SessionMeta[]>;
 		loadHistory: (projectDir: string, sessionId: string) => Promise<unknown[]>;
 		updateTitle: (sessionId: string, title: string) => Promise<void>;
+		minimize: () => Promise<void>;
+		maximize: () => Promise<void>;
+		close: () => Promise<void>;
+		isMaximized: () => Promise<boolean>;
+		onMaximizeChange: (callback: (maximized: boolean) => void) => () => void;
 	};
 }
 
@@ -54,6 +59,17 @@ const api: JSmartAPI = {
 		loadHistory: (projectDir: string, sessionId: string) =>
 			ipcRenderer.invoke("app:loadHistory", projectDir, sessionId),
 		updateTitle: (sessionId: string, title: string) => ipcRenderer.invoke("app:updateTitle", sessionId, title),
+		minimize: () => ipcRenderer.invoke("app:minimize"),
+		maximize: () => ipcRenderer.invoke("app:maximize"),
+		close: () => ipcRenderer.invoke("app:close"),
+		isMaximized: () => ipcRenderer.invoke("app:isMaximized"),
+		onMaximizeChange: (callback: (maximized: boolean) => void) => {
+			const handler = () => {
+				ipcRenderer.invoke("app:isMaximized").then(callback);
+			};
+			window.addEventListener("resize", handler);
+			return () => window.removeEventListener("resize", handler);
+		},
 	},
 };
 
