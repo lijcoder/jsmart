@@ -649,3 +649,28 @@ body {
 ::-webkit-scrollbar-thumb:hover {
 	background: var(--text-muted);
 }
+
+/* ── Scroll to Bottom ────────────────────────────────────────── */
+
+.scroll-bottom-btn {
+	position: absolute;
+	bottom: 120px;
+	left: 50%;
+	transform: translateX(-50%);
+	padding: 6px 16px;
+	background: var(--bg-primary);
+	border: 1px solid var(--border);
+	border-radius: 20px;
+	color: var(--text-secondary);
+	font-size: 12px;
+	font-family: inherit;
+	cursor: pointer;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	z-index: 4;
+	transition: box-shadow 0.15s;
+}
+
+.scroll-bottom-btn:hover {
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	color: var(--text-primary);
+}

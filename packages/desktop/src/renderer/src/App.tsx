@@ -54,6 +54,7 @@ export function App() {
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const chatMessagesRef = useRef<HTMLDivElement>(null);
 	const userScrolledUpRef = useRef(false);
+	const [userScrolledUp, setUserScrolledUp] = useState(false);
 	const sidebarRef = useRef<HTMLElement>(null);
 
 	// Per-session state
@@ -68,29 +69,6 @@ export function App() {
 	const running = activeState?.running ?? false;
 	const streamingMsg = activeState?.streaming ?? null;
 
-	// Track manual scroll: wheel up → stop auto-scroll; scroll to bottom → resume
-	useEffect(() => {
-		const el = chatMessagesRef.current;
-		if (!el) return;
-		const onWheel = (e: WheelEvent) => {
-			if (e.deltaY < 0) {
-				userScrolledUpRef.current = true;
-			}
-		};
-		const onScroll = () => {
-			const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
-			if (isAtBottom) {
-				userScrolledUpRef.current = false;
-			}
-		};
-		el.addEventListener("wheel", onWheel);
-		el.addEventListener("scroll", onScroll);
-		return () => {
-			el.removeEventListener("wheel", onWheel);
-			el.removeEventListener("scroll", onScroll);
-		};
-	}, []);
-
 	// Auto-scroll to bottom unless user manually scrolled up
 	useEffect(() => {
 		if (!userScrolledUpRef.current) {
@@ -104,6 +82,12 @@ export function App() {
 			messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
 		}
 	}, [streamingMsg?.blocks]);
+
+	const scrollToBottom = () => {
+		userScrolledUpRef.current = false;
+		setUserScrolledUp(false);
+		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+	};
 
 	// Load saved sessions on mount
 	const refreshSavedSessions = useCallback(async () => {
@@ -351,6 +335,22 @@ export function App() {
 		...(streamingMsg ? [streamingMsg] : []),
 	];
 
+	// Track whether bottom anchor is visible
+	useEffect(() => {
+		const el = messagesEndRef.current;
+		if (!el || !chatMessagesRef.current) return;
+		const observer = new IntersectionObserver(
+			([entry]) => {
+				const hidden = !entry.isIntersecting;
+				userScrolledUpRef.current = hidden;
+				setUserScrolledUp((prev) => (prev !== hidden ? hidden : prev));
+			},
+			{ root: chatMessagesRef.current, threshold: 0 },
+		);
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, [displayMessages, streamingMsg]);
+
 	return (
 		<div className="app">
 			<aside className="sidebar" ref={sidebarRef} style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
@@ -447,6 +447,12 @@ export function App() {
 							))}
 							<div ref={messagesEndRef} />
 						</div>
+
+						{userScrolledUp && (
+							<button type="button" className="scroll-bottom-btn" onClick={scrollToBottom}>
+								↓ 回到底部
+							</button>
+						)}
 
 						<div className="chat-input">
 							<div className="input-wrapper">
