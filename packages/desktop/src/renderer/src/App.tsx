@@ -80,6 +80,9 @@ export function App() {
 	const userScrolledUpRef = useRef(false);
 	const [userScrolledUp, setUserScrolledUp] = useState(false);
 	const sidebarRef = useRef<HTMLElement>(null);
+	const userMessageRefsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+	const [showNavDropdown, setShowNavDropdown] = useState(false);
+	const navDropdownRef = useRef<HTMLDivElement>(null);
 
 	// Per-session state
 	const sessionStatesRef = useRef<
@@ -119,6 +122,28 @@ export function App() {
 		userScrolledUpRef.current = false;
 		setUserScrolledUp(false);
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+	};
+
+	// Get user messages for navigation
+	const userMessages = messages.filter((msg) => msg.role === "user");
+	const userMessageIds = userMessages.map((msg) => msg.id);
+
+	const scrollToUserMessage = (messageId: string) => {
+		const el = userMessageRefsRef.current.get(messageId);
+		if (el) {
+			el.scrollIntoView({ behavior: "smooth", block: "center" });
+			// Highlight animation
+			el.classList.add("user-message-highlight");
+			setTimeout(() => el.classList.remove("user-message-highlight"), 1000);
+		}
+	};
+
+	// Get preview text from user message (first line, truncated)
+	const getMessagePreview = (msg: UIMessage): string => {
+		const textBlock = msg.blocks.find((b) => b.type === "user_text");
+		if (!textBlock?.text) return "消息";
+		const firstLine = textBlock.text.split("\n")[0];
+		return firstLine.length > 30 ? `${firstLine.slice(0, 30)}...` : firstLine;
 	};
 
 	// Load saved sessions on mount
@@ -394,7 +419,7 @@ export function App() {
 
 	// Close model picker on outside click
 	useEffect(() => {
-		if (!showModelPicker && !showThinkingPicker) return;
+		if (!showModelPicker && !showThinkingPicker && !showNavDropdown) return;
 		const handler = (e: MouseEvent) => {
 			if (
 				showModelPicker &&
@@ -410,10 +435,17 @@ export function App() {
 			) {
 				setShowThinkingPicker(false);
 			}
+			if (
+				showNavDropdown &&
+				navDropdownRef.current &&
+				!navDropdownRef.current.contains(e.target as Node)
+			) {
+				setShowNavDropdown(false);
+			}
 		};
 		document.addEventListener("mousedown", handler);
 		return () => document.removeEventListener("mousedown", handler);
-	}, [showModelPicker, showThinkingPicker]);
+	}, [showModelPicker, showThinkingPicker, showNavDropdown]);
 
 	const setThinking = async (level: string) => {
 		if (!activeId) return;
@@ -622,7 +654,7 @@ export function App() {
 								</div>
 							)}
 							{displayMessages.map((msg) => (
-								<MessageBubble key={msg.id} message={msg} />
+								<MessageBubble key={msg.id} message={msg} userMessageRefs={userMessageRefsRef} />
 							))}
 							<div ref={messagesEndRef} />
 						</div>
@@ -664,7 +696,37 @@ export function App() {
 									</div>
 								)}
 								<div className="input-bar">
-									<span className="input-project">{activeProjectDir.split("/").pop() || activeProjectDir}</span>
+									<div className="input-bar-left">
+										<span className="input-project">{activeProjectDir.split("/").pop() || activeProjectDir}</span>
+										<div className="message-nav" ref={navDropdownRef}>
+											{userMessages.length > 0 && (
+												<>
+													<button
+														type="button"
+														className="model-picker-btn"
+														onClick={() => setShowNavDropdown(!showNavDropdown)}
+													>
+														消息 ({userMessages.length})
+													</button>
+													{showNavDropdown && (
+														<div className="nav-dropdown">
+															{userMessages.map((msg, index) => (
+																<button
+																	type="button"
+																	key={msg.id}
+																	className="nav-dropdown-item"
+																	onClick={() => scrollToUserMessage(msg.id)}
+																>
+																	<span className="nav-dropdown-index">{index + 1}</span>
+																	<span className="nav-dropdown-text">{getMessagePreview(msg)}</span>
+																</button>
+															))}
+														</div>
+													)}
+												</>
+											)}
+										</div>
+									</div>
 									<div className="input-bar-right">
 										<div className="thinking-picker" ref={thinkingPickerRef}>
 											<button
@@ -777,13 +839,19 @@ function contentToBlocks(content: unknown): UIContentBlock[] {
 	return blocks;
 }
 
-function MessageBubble({ message }: { message: UIMessage }) {
+function MessageBubble({ message, userMessageRefs }: { message: UIMessage; userMessageRefs: React.MutableRefObject<Map<string, HTMLDivElement>> }) {
 	const isStreaming = message.id === "streaming";
 	const isAssistant = message.role === "assistant";
 
 	if (message.role === "user") {
 		return (
-			<div className="message message-user">
+			<div
+				className="message message-user"
+				ref={(el) => {
+					if (el) userMessageRefs.current.set(message.id, el);
+				}}
+				data-message-id={message.id}
+			>
 				<div className="message-content">
 					{message.blocks.map((block, i) => (
 						<ContentBlock key={i} block={block} isStreaming={false} />
