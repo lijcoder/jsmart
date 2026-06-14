@@ -658,6 +658,7 @@ li code,
 }
 
 .input-wrapper {
+	position: relative;
 	width: 100%;
 	max-width: min(760px, 90%);
 	background: #ffffff;
