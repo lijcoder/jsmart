@@ -263,10 +263,38 @@ body {
 	cursor: pointer;
 	text-align: left;
 	display: flex;
-	flex-direction: column;
-	gap: 1px;
+	align-items: center;
+	gap: 6px;
 	min-width: 0;
 	position: relative;
+}
+
+.session-status-icon {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.session-status-icon.running {
+	background: var(--accent);
+	animation: session-pulse 1.2s ease-in-out infinite;
+}
+
+.session-status-icon.completed {
+	background: var(--success);
+	animation: session-complete-in 0.3s ease-out;
+}
+
+@keyframes session-complete-in {
+	0% { opacity: 0; transform: scale(0.4); }
+	60% { transform: scale(1.15); }
+	100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes session-pulse {
+	0%, 100% { opacity: 1; transform: scale(1); }
+	50% { opacity: 0.4; transform: scale(0.6); }
 }
 
 .session-name {

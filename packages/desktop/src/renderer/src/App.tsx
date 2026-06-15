@@ -86,7 +86,7 @@ export function App() {
 
 	// Per-session state
 	const sessionStatesRef = useRef<
-		Map<string, { messages: UIMessage[]; streaming: UIMessage | null; running: boolean }>
+		Map<string, { messages: UIMessage[]; streaming: UIMessage | null; running: boolean; lastCompleted: number }>
 	>(new Map());
 	const [, setTick] = useState(0);
 	const forceRender = () => setTick((t) => t + 1);
@@ -173,6 +173,7 @@ export function App() {
 				case "agent_start":
 					state.running = true;
 					state.streaming = { id: "streaming", role: "assistant", blocks: [] };
+					forceRender();
 					break;
 
 				case "message_update": {
@@ -243,10 +244,12 @@ export function App() {
 				case "agent_end": {
 					const stream = state.streaming;
 					state.running = false;
+					state.lastCompleted = Date.now();
 					state.streaming = null;
 					if (stream && stream.blocks.length > 0) {
 						state.messages = [...state.messages, { ...stream, id: crypto.randomUUID() }];
 					}
+					forceRender();
 					break;
 				}
 
@@ -274,7 +277,7 @@ export function App() {
 		const dir = await window.jsmart.app.selectProject();
 		if (!dir) return;
 		const info = await window.jsmart.session.create(dir);
-		sessionStatesRef.current.set(info.id, { messages: [], streaming: null, running: false });
+		sessionStatesRef.current.set(info.id, { messages: [], streaming: null, running: false, lastCompleted: 0 });
 		setActiveId(info.id);
 		setActiveProjectDir(dir);
 		setCurrentModelId(info.model);
@@ -288,7 +291,7 @@ export function App() {
 
 	const handleCreateSessionInWorkspace = async (workspace: string) => {
 		const info = await window.jsmart.session.create(workspace);
-		sessionStatesRef.current.set(info.id, { messages: [], streaming: null, running: false });
+		sessionStatesRef.current.set(info.id, { messages: [], streaming: null, running: false, lastCompleted: 0 });
 		setActiveId(info.id);
 		setActiveProjectDir(workspace);
 		setCurrentModelId(info.model);
@@ -307,12 +310,17 @@ export function App() {
 
 		const needsCreate = !sessionStatesRef.current.has(sessionId);
 		if (needsCreate) {
-			sessionStatesRef.current.set(sessionId, { messages: [], streaming: null, running: false });
+			sessionStatesRef.current.set(sessionId, { messages: [], streaming: null, running: false, lastCompleted: 0 });
 			const info = await window.jsmart.session.create(workspace, sessionId);
 			setCurrentModelId(info.model);
 		} else {
 			const info = await window.jsmart.session.getInfo(sessionId);
 			if (info) setCurrentModelId(info.model);
+			// Clear completion indicator when user views the session
+			const existingState = sessionStatesRef.current.get(sessionId);
+			if (existingState && existingState.lastCompleted > 0) {
+				existingState.lastCompleted = 0;
+			}
 		}
 		await loadModels();
 		setThinkingLevel(await window.jsmart.session.getThinkingLevel(sessionId));
@@ -601,7 +609,11 @@ export function App() {
 										<span className="add-session-icon">+</span>
 									</button>
 								</div>
-								{!isCollapsed && sessions.map((s) => (
+								{!isCollapsed && sessions.map((s) => {
+									const sState = sessionStatesRef.current.get(s.id);
+									const isRunning = sState?.running ?? false;
+									const justCompleted = !isRunning && sState && sState.lastCompleted > 0 && (Date.now() - sState.lastCompleted < 2500);
+									return (
 										<div key={s.id} className={`session-item ${s.id === activeId ? "active" : ""}`}>
 											{editingSessionId === s.id ? (
 												<input
@@ -622,6 +634,11 @@ export function App() {
 													onClick={() => handleSelectSavedSession(s.id, s.workspace)}
 													onDoubleClick={() => startEditTitle(s.id, s.title)}
 												>
+													{isRunning ? (
+														<span className="session-status-icon running" title="运行中" />
+													) : justCompleted ? (
+														<span className="session-status-icon completed" title="已完成" />
+													) : null}
 													<span className="session-name">{s.title}</span>
 												</button>
 											)}
@@ -636,7 +653,8 @@ export function App() {
 												×
 											</button>
 										</div>
-									))}
+									);
+								})}
 							</div>
 						);
 					})}
