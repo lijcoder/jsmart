@@ -566,7 +566,7 @@ export function App() {
 		<div className="app">
 			<aside className="sidebar" ref={sidebarRef} style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
 				<button type="button" className="btn-new" onClick={handleCreateSession}>
-					+ 新建会话
+					<span className="btn-new-icon">+</span> 新建会话
 				</button>
 				<div className="session-list">
 					{[...workspaceGroups.entries()].map(([workspace, sessions]) => {
@@ -598,7 +598,7 @@ export function App() {
 										}}
 										title="在此工作空间新建会话"
 									>
-										+
+										<span className="add-session-icon">+</span>
 									</button>
 								</div>
 								{!isCollapsed && sessions.map((s) => (
@@ -633,7 +633,7 @@ export function App() {
 													handleDeleteSession(s.id);
 												}}
 											>
-												x
+												×
 											</button>
 										</div>
 									))}
