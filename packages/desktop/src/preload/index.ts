@@ -36,6 +36,8 @@ export interface JSmartAPI {
 		updateTitle: (sessionId: string, title: string) => Promise<void>;
 		listWorkspaces: () => Promise<string[]>;
 		removeWorkspace: (workspace: string) => Promise<void>;
+		reorderWorkspaces: (newOrder: string[]) => Promise<void>;
+		reorderSessions: (workspace: string, sessionIds: string[]) => Promise<void>;
 		minimize: () => Promise<void>;
 		maximize: () => Promise<void>;
 		close: () => Promise<void>;
@@ -76,6 +78,9 @@ const api: JSmartAPI = {
 		updateTitle: (sessionId: string, title: string) => ipcRenderer.invoke("app:updateTitle", sessionId, title),
 		listWorkspaces: () => ipcRenderer.invoke("app:listWorkspaces"),
 		removeWorkspace: (workspace: string) => ipcRenderer.invoke("app:removeWorkspace", workspace),
+		reorderWorkspaces: (newOrder: string[]) => ipcRenderer.invoke("app:reorderWorkspaces", newOrder),
+		reorderSessions: (workspace: string, sessionIds: string[]) =>
+			ipcRenderer.invoke("app:reorderSessions", workspace, sessionIds),
 		minimize: () => ipcRenderer.invoke("app:minimize"),
 		maximize: () => ipcRenderer.invoke("app:maximize"),
 		close: () => ipcRenderer.invoke("app:close"),

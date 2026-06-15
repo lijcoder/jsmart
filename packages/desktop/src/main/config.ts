@@ -134,6 +134,7 @@ export interface SessionMeta {
 
 export interface SessionIndex {
 	workspaces: Record<string, SessionEntry[]>;
+	workspaceOrder?: string[];
 }
 
 interface SessionEntry {
@@ -271,6 +272,16 @@ export function loadSessionMessages(projectDir: string, sessionId: string): unkn
 /** List all workspace directories from the index (including empty ones) */
 export function listWorkspaces(): string[] {
 	const index = loadIndex();
+	if (index.workspaceOrder && index.workspaceOrder.length > 0) {
+		// Return in persisted order, ensure all current workspaces are included
+		const current = new Set(Object.keys(index.workspaces));
+		const ordered = index.workspaceOrder.filter((w) => current.has(w));
+		// Append any workspaces not yet in the order list
+		for (const w of current) {
+			if (!ordered.includes(w)) ordered.push(w);
+		}
+		return ordered;
+	}
 	return Object.keys(index.workspaces);
 }
 
@@ -279,6 +290,10 @@ export function removeWorkspace(workspace: string): void {
 	const index = loadIndex();
 	const entries = index.workspaces[workspace] ?? [];
 	delete index.workspaces[workspace];
+	// Remove from workspaceOrder if present
+	if (index.workspaceOrder) {
+		index.workspaceOrder = index.workspaceOrder.filter((w) => w !== workspace);
+	}
 	saveIndex(index);
 
 	// Delete all session files for this workspace
@@ -291,4 +306,23 @@ export function removeWorkspace(workspace: string): void {
 			}
 		}
 	}
+}
+
+/** Reorder workspaces — persists the new workspace order */
+export function reorderWorkspaces(newOrder: string[]): void {
+	const index = loadIndex();
+	index.workspaceOrder = newOrder;
+	saveIndex(index);
+}
+
+/** Reorder sessions within a workspace */
+export function reorderSessions(workspace: string, sessionIds: string[]): void {
+	const index = loadIndex();
+	const entries = index.workspaces[workspace];
+	if (!entries) return;
+
+	const entryMap = new Map(entries.map((e) => [e.id, e]));
+	index.workspaces[workspace] = sessionIds.filter((id) => entryMap.has(id)).map((id) => entryMap.get(id)!);
+
+	saveIndex(index);
 }

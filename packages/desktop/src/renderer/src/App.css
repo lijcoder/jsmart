@@ -175,6 +175,17 @@ body {
 .workspace-header:hover {
 	background: rgba(0, 0, 0, 0.04);
 	color: var(--text-primary);
+	cursor: grab;
+}
+
+.workspace-header:active {
+	cursor: grabbing;
+}
+
+.workspace-header.drag-over {
+	background: rgba(59, 109, 240, 0.08);
+	outline: 2px dashed var(--accent);
+	outline-offset: -2px;
 }
 
 .workspace-chevron {
@@ -333,12 +344,23 @@ body {
 
 .session-item:hover {
 	background: var(--bg-primary);
+	cursor: grab;
+}
+
+.session-item:active {
+	cursor: grabbing;
 }
 
 .session-item.active {
 	background: var(--bg-primary);
 	box-shadow: inset 3px 0 0 var(--accent);
 	border-radius: 6px 4px 4px 6px;
+}
+
+.session-item.drag-over {
+	background: rgba(59, 109, 240, 0.08);
+	outline: 1px dashed var(--accent);
+	outline-offset: -1px;
 }
 
 .session-btn {

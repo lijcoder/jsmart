@@ -48,6 +48,15 @@ export function App() {
 	const thinkingPickerRef = useRef<HTMLDivElement>(null);
 	const modelPickerRef = useRef<HTMLDivElement>(null);
 
+	// Drag-and-drop state
+	const dragRef = useRef<{
+		type: "workspace" | "session" | null;
+		workspace: string | null;
+		sessionId: string | null;
+	}>({ type: null, workspace: null, sessionId: null });
+	const [dragOverWorkspace, setDragOverWorkspace] = useState<string | null>(null);
+	const [dragOverSession, setDragOverSession] = useState<string | null>(null);
+
 	const startEditTitle = (sessionId: string, currentTitle: string) => {
 		setEditingSessionId(sessionId);
 		setEditTitle(currentTitle);
@@ -387,6 +396,99 @@ export function App() {
 		await refreshSavedSessions();
 	};
 
+	// ── Drag-and-drop handlers ─────────────────────────────────────
+
+	const handleWorkspaceDragStart = (e: React.DragEvent, workspace: string) => {
+		dragRef.current = { type: "workspace", workspace, sessionId: null };
+		e.dataTransfer.effectAllowed = "move";
+		e.dataTransfer.setData("text/plain", workspace);
+	};
+
+	const handleWorkspaceDragOver = (e: React.DragEvent, workspace: string) => {
+		if (dragRef.current.type !== "workspace") return;
+		if (dragRef.current.workspace === workspace) return;
+		e.preventDefault();
+		e.dataTransfer.dropEffect = "move";
+		setDragOverWorkspace(workspace);
+	};
+
+	const handleWorkspaceDragLeave = () => {
+		setDragOverWorkspace(null);
+	};
+
+	const handleWorkspaceDrop = async (e: React.DragEvent, targetWorkspace: string) => {
+		e.preventDefault();
+		setDragOverWorkspace(null);
+		const source = dragRef.current.workspace;
+		if (!source || source === targetWorkspace) return;
+
+		const ordered = [...workspaceList];
+		const srcIdx = ordered.indexOf(source);
+		const dstIdx = ordered.indexOf(targetWorkspace);
+		if (srcIdx === -1 || dstIdx === -1) return;
+
+		ordered.splice(srcIdx, 1);
+		ordered.splice(dstIdx, 0, source);
+		setWorkspaceList(ordered);
+		await window.jsmart.app.reorderWorkspaces(ordered);
+	};
+
+	const handleWorkspaceDragEnd = () => {
+		dragRef.current = { type: null, workspace: null, sessionId: null };
+		setDragOverWorkspace(null);
+	};
+
+	const handleSessionDragStart = (e: React.DragEvent, workspace: string, sessionId: string) => {
+		dragRef.current = { type: "session", workspace, sessionId };
+		e.dataTransfer.effectAllowed = "move";
+		e.dataTransfer.setData("text/plain", sessionId);
+	};
+
+	const handleSessionDragOver = (e: React.DragEvent, workspace: string, sessionId: string) => {
+		if (dragRef.current.type !== "session") return;
+		if (dragRef.current.workspace !== workspace) return;
+		if (dragRef.current.sessionId === sessionId) return;
+		e.preventDefault();
+		e.dataTransfer.dropEffect = "move";
+		setDragOverSession(sessionId);
+	};
+
+	const handleSessionDragLeave = () => {
+		setDragOverSession(null);
+	};
+
+	const handleSessionDrop = async (e: React.DragEvent, workspace: string, targetSessionId: string) => {
+		e.preventDefault();
+		setDragOverSession(null);
+		const source = dragRef.current;
+		if (source.type !== "session" || source.workspace !== workspace) return;
+		if (source.sessionId === targetSessionId) return;
+
+		const sessions = workspaceGroups.get(workspace);
+		if (!sessions) return;
+
+		const srcIdx = sessions.findIndex((s) => s.id === source.sessionId);
+		const dstIdx = sessions.findIndex((s) => s.id === targetSessionId);
+		if (srcIdx === -1 || dstIdx === -1) return;
+
+		const reordered = [...sessions];
+		const [moved] = reordered.splice(srcIdx, 1);
+		reordered.splice(dstIdx, 0, moved);
+
+		// Update local state
+		setSavedSessions((prev) => {
+			const others = prev.filter((s) => s.workspace !== workspace);
+			return [...others, ...reordered];
+		});
+
+		await window.jsmart.app.reorderSessions(workspace, reordered.map((s) => s.id));
+	};
+
+	const handleSessionDragEnd = () => {
+		dragRef.current = { type: null, workspace: null, sessionId: null };
+		setDragOverSession(null);
+	};
+
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const composingRef = useRef(false);
 
@@ -635,7 +737,13 @@ export function App() {
 						return (
 							<div key={workspace} className="workspace-group">
 								<div
-									className="workspace-header"
+									className={`workspace-header${dragOverWorkspace === workspace ? " drag-over" : ""}`}
+									draggable
+									onDragStart={(e) => handleWorkspaceDragStart(e, workspace)}
+									onDragOver={(e) => handleWorkspaceDragOver(e, workspace)}
+									onDragLeave={handleWorkspaceDragLeave}
+									onDrop={(e) => handleWorkspaceDrop(e, workspace)}
+									onDragEnd={handleWorkspaceDragEnd}
 									onClick={() => toggleWorkspace(workspace)}
 									onKeyDown={(e) => {
 										if (e.key === "Enter" || e.key === " ") {
@@ -719,7 +827,16 @@ export function App() {
 									const isRunning = sState?.running ?? false;
 									const justCompleted = !isRunning && sState && sState.lastCompleted > 0 && (Date.now() - sState.lastCompleted < 2500);
 									return (
-										<div key={s.id} className={`session-item ${s.id === activeId ? "active" : ""}`}>
+										<div
+											key={s.id}
+											className={`session-item${s.id === activeId ? " active" : ""}${dragOverSession === s.id ? " drag-over" : ""}`}
+											draggable={editingSessionId !== s.id}
+											onDragStart={(e) => handleSessionDragStart(e, workspace, s.id)}
+											onDragOver={(e) => handleSessionDragOver(e, workspace, s.id)}
+											onDragLeave={handleSessionDragLeave}
+											onDrop={(e) => handleSessionDrop(e, workspace, s.id)}
+											onDragEnd={handleSessionDragEnd}
+										>
 											{editingSessionId === s.id ? (
 												<input
 													className="session-edit-input"

@@ -5,6 +5,8 @@ import {
 	listWorkspaces,
 	loadSessionMessages,
 	removeWorkspace,
+	reorderSessions,
+	reorderWorkspaces,
 	updateSessionTitle,
 } from "./config.js";
 import type { SessionManager } from "./session-manager.js";
@@ -95,6 +97,14 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
 
 	ipcMain.handle("app:removeWorkspace", async (_event, workspace: string) => {
 		removeWorkspace(workspace);
+	});
+
+	ipcMain.handle("app:reorderWorkspaces", async (_event, newOrder: string[]) => {
+		reorderWorkspaces(newOrder);
+	});
+
+	ipcMain.handle("app:reorderSessions", async (_event, workspace: string, sessionIds: string[]) => {
+		reorderSessions(workspace, sessionIds);
 	});
 
 	// ── Window Controls ──────────────────────────────────────────
