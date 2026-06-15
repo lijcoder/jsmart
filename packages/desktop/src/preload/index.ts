@@ -38,6 +38,7 @@ export interface JSmartAPI {
 		maximize: () => Promise<void>;
 		close: () => Promise<void>;
 		isMaximized: () => Promise<boolean>;
+		openExternal: (url: string) => Promise<void>;
 		onMaximizeChange: (callback: (maximized: boolean) => void) => () => void;
 	};
 }
@@ -75,6 +76,7 @@ const api: JSmartAPI = {
 		maximize: () => ipcRenderer.invoke("app:maximize"),
 		close: () => ipcRenderer.invoke("app:close"),
 		isMaximized: () => ipcRenderer.invoke("app:isMaximized"),
+		openExternal: (url: string) => ipcRenderer.invoke("app:openExternal", url),
 		onMaximizeChange: (callback: (maximized: boolean) => void) => {
 			const handler = () => {
 				ipcRenderer.invoke("app:isMaximized").then(callback);

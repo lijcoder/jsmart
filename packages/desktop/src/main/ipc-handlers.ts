@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain } from "electron";
+import { BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { detectProjectDir, listAllSessions, loadSessionMessages, updateSessionTitle } from "./config.js";
 import type { SessionManager } from "./session-manager.js";
 
@@ -104,5 +104,9 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
 
 	ipcMain.handle("app:isMaximized", async (_event) => {
 		return BrowserWindow.fromWebContents(_event.sender)?.isMaximized() ?? false;
+	});
+
+	ipcMain.handle("app:openExternal", async (_event, url: string) => {
+		await shell.openExternal(url);
 	});
 }
