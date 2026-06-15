@@ -34,6 +34,11 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
 					</a>
 				);
 			},
+			table: ({ children, ...props }: React.TableHTMLAttributes<HTMLTableElement>) => (
+				<div className="table-wrapper">
+					<table {...props}>{children}</table>
+				</div>
+			),
 		}),
 		[codeBlockComponents, handleLinkClick],
 	);

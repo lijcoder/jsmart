@@ -580,6 +580,8 @@ body {
 	border: none;
 	padding: 0;
 	line-height: 1.6;
+	overflow: hidden;
+	word-break: break-word;
 }
 
 /* User message — grey bubble, inline */
@@ -591,6 +593,8 @@ body {
 	line-height: 1.5;
 	display: inline-block;
 	max-width: 100%;
+	overflow: hidden;
+	word-break: break-word;
 }
 
 .message-user {
@@ -639,7 +643,18 @@ body {
 .message-content table {
 	border-collapse: collapse;
 	margin: 8px 0;
-	width: 100%;
+	width: max-content;
+	min-width: 100%;
+}
+
+.table-wrapper {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	scrollbar-width: none;
+}
+
+.table-wrapper::-webkit-scrollbar {
+	display: none;
 }
 
 .message-content th,
@@ -705,6 +720,7 @@ body {
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	overflow: hidden;
+	min-width: 0;
 }
 
 .code-block-header {
@@ -808,6 +824,7 @@ body {
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	overflow: hidden;
+	min-width: 0;
 }
 
 .code-block code {
