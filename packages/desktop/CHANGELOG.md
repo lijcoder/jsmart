@@ -10,6 +10,7 @@
 - User message navigation: dropdown list in input bar to quickly jump to any user message with highlight animation
 
 ### Fixed
+- Content overflow: long unbroken text now wraps, wide tables scroll horizontally within messages instead of causing page-level horizontal scrollbar
 - Slash commands (`/model`, `/workspace`, `/session`, etc.) now display output in the chat
 - Slash command output containing nested code fences no longer breaks code block rendering
 - Slash command menu positioning restored after input layout refactor
