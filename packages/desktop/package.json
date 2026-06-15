@@ -5,6 +5,7 @@
 	"type": "module",
 	"main": "./dist/main/index.js",
 	"scripts": {
+		"clean": "shx rm -rf dist",
 		"dev": "electron-vite dev",
 		"dev:debug": "electron-vite dev --inspect 5858",
 		"build": "electron-vite build",
