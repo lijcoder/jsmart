@@ -41,6 +41,7 @@ export function App() {
 	const [showModelPicker, setShowModelPicker] = useState(false);
 	const [thinkingLevel, setThinkingLevel] = useState("off");
 	const [showThinkingPicker, setShowThinkingPicker] = useState(false);
+	const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 	const thinkingPickerRef = useRef<HTMLDivElement>(null);
 	const modelPickerRef = useRef<HTMLDivElement>(null);
 
@@ -455,6 +456,19 @@ export function App() {
 		return () => document.removeEventListener("mousedown", handler);
 	}, [showModelPicker, showThinkingPicker, showNavDropdown]);
 
+	// Close confirm delete popover on outside click
+	useEffect(() => {
+		if (!pendingDeleteId) return;
+		const handler = (e: MouseEvent) => {
+			const popover = document.querySelector(".confirm-delete-popover");
+			if (popover && !popover.contains(e.target as Node)) {
+				setPendingDeleteId(null);
+			}
+		};
+		document.addEventListener("mousedown", handler);
+		return () => document.removeEventListener("mousedown", handler);
+	}, [pendingDeleteId]);
+
 	const setThinking = async (level: string) => {
 		if (!activeId) return;
 		await window.jsmart.session.setThinkingLevel(activeId, level);
@@ -647,11 +661,37 @@ export function App() {
 												className="btn-delete"
 												onClick={(e) => {
 													e.stopPropagation();
-													handleDeleteSession(s.id);
+													setPendingDeleteId(s.id);
 												}}
 											>
 												×
 											</button>
+											{pendingDeleteId === s.id && (
+												<div className="confirm-delete-popover">
+													<span className="confirm-delete-text">确认删除？</span>
+													<button
+														type="button"
+														className="confirm-delete-btn confirm-delete-yes"
+														onClick={(e) => {
+															e.stopPropagation();
+															handleDeleteSession(s.id);
+															setPendingDeleteId(null);
+														}}
+													>
+														删除
+													</button>
+													<button
+														type="button"
+														className="confirm-delete-btn confirm-delete-no"
+														onClick={(e) => {
+															e.stopPropagation();
+															setPendingDeleteId(null);
+														}}
+													>
+														取消
+													</button>
+												</div>
+											)}
 										</div>
 									);
 								})}
