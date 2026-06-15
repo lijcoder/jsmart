@@ -34,6 +34,8 @@ export interface JSmartAPI {
 		listSessions: () => Promise<SessionMeta[]>;
 		loadHistory: (projectDir: string, sessionId: string) => Promise<unknown[]>;
 		updateTitle: (sessionId: string, title: string) => Promise<void>;
+		listWorkspaces: () => Promise<string[]>;
+		removeWorkspace: (workspace: string) => Promise<void>;
 		minimize: () => Promise<void>;
 		maximize: () => Promise<void>;
 		close: () => Promise<void>;
@@ -72,6 +74,8 @@ const api: JSmartAPI = {
 		loadHistory: (projectDir: string, sessionId: string) =>
 			ipcRenderer.invoke("app:loadHistory", projectDir, sessionId),
 		updateTitle: (sessionId: string, title: string) => ipcRenderer.invoke("app:updateTitle", sessionId, title),
+		listWorkspaces: () => ipcRenderer.invoke("app:listWorkspaces"),
+		removeWorkspace: (workspace: string) => ipcRenderer.invoke("app:removeWorkspace", workspace),
 		minimize: () => ipcRenderer.invoke("app:minimize"),
 		maximize: () => ipcRenderer.invoke("app:maximize"),
 		close: () => ipcRenderer.invoke("app:close"),

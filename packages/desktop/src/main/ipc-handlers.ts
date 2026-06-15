@@ -1,5 +1,12 @@
 import { BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { detectProjectDir, listAllSessions, loadSessionMessages, updateSessionTitle } from "./config.js";
+import {
+	detectProjectDir,
+	listAllSessions,
+	listWorkspaces,
+	loadSessionMessages,
+	removeWorkspace,
+	updateSessionTitle,
+} from "./config.js";
 import type { SessionManager } from "./session-manager.js";
 
 export function registerIpcHandlers(sessionManager: SessionManager): void {
@@ -80,6 +87,14 @@ export function registerIpcHandlers(sessionManager: SessionManager): void {
 
 	ipcMain.handle("app:updateTitle", async (_event, sessionId: string, title: string) => {
 		updateSessionTitle(sessionId, title);
+	});
+
+	ipcMain.handle("app:listWorkspaces", async () => {
+		return listWorkspaces();
+	});
+
+	ipcMain.handle("app:removeWorkspace", async (_event, workspace: string) => {
+		removeWorkspace(workspace);
 	});
 
 	// ── Window Controls ──────────────────────────────────────────

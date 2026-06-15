@@ -29,6 +29,7 @@ interface SavedSession {
 
 export function App() {
 	const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
+	const [workspaceList, setWorkspaceList] = useState<string[]>([]);
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [activeProjectDir, setActiveProjectDir] = useState<string>("");
 	const [input, setInput] = useState("");
@@ -42,6 +43,8 @@ export function App() {
 	const [thinkingLevel, setThinkingLevel] = useState("off");
 	const [showThinkingPicker, setShowThinkingPicker] = useState(false);
 	const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+	const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState<string | null>(null);
+	const [pendingRemoveWorkspace, setPendingRemoveWorkspace] = useState<string | null>(null);
 	const thinkingPickerRef = useRef<HTMLDivElement>(null);
 	const modelPickerRef = useRef<HTMLDivElement>(null);
 
@@ -69,8 +72,11 @@ export function App() {
 		});
 	};
 
-	// Group sessions by workspace
+	// Group sessions by workspace (include empty workspaces from workspaceList)
 	const workspaceGroups = new Map<string, SavedSession[]>();
+	for (const w of workspaceList) {
+		workspaceGroups.set(w, []);
+	}
 	for (const s of savedSessions) {
 		const list = workspaceGroups.get(s.workspace) ?? [];
 		list.push(s);
@@ -158,6 +164,8 @@ export function App() {
 				mtime: s.mtime,
 			})),
 		);
+		const wsp = await window.jsmart.app.listWorkspaces();
+		setWorkspaceList(wsp);
 	}, []);
 
 	useEffect(() => {
@@ -365,6 +373,20 @@ export function App() {
 		await refreshSavedSessions();
 	};
 
+	const handleRemoveWorkspace = async (workspace: string) => {
+		// Close any active session in this workspace
+		const sessionsInWorkspace = workspaceGroups.get(workspace) ?? [];
+		for (const s of sessionsInWorkspace) {
+			sessionStatesRef.current.delete(s.id);
+			if (activeId === s.id) {
+				setActiveId(null);
+			}
+		}
+		await window.jsmart.app.removeWorkspace(workspace);
+		setPendingRemoveWorkspace(null);
+		await refreshSavedSessions();
+	};
+
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const composingRef = useRef(false);
 
@@ -456,18 +478,34 @@ export function App() {
 		return () => document.removeEventListener("mousedown", handler);
 	}, [showModelPicker, showThinkingPicker, showNavDropdown]);
 
-	// Close confirm delete popover on outside click
+	// Close popovers on outside click
 	useEffect(() => {
-		if (!pendingDeleteId) return;
+		if (!pendingDeleteId && !workspaceMenuOpen && !pendingRemoveWorkspace) return;
 		const handler = (e: MouseEvent) => {
-			const popover = document.querySelector(".confirm-delete-popover");
-			if (popover && !popover.contains(e.target as Node)) {
-				setPendingDeleteId(null);
+			if (pendingDeleteId) {
+				const popover = document.querySelector(".confirm-delete-popover");
+				if (popover && !popover.contains(e.target as Node)) {
+					setPendingDeleteId(null);
+					return;
+				}
+			}
+			if (workspaceMenuOpen) {
+				const menu = document.querySelector(".workspace-menu");
+				if (menu && !menu.contains(e.target as Node)) {
+					setWorkspaceMenuOpen(null);
+					return;
+				}
+			}
+			if (pendingRemoveWorkspace) {
+				const popover = document.querySelector(".confirm-remove-ws-popover");
+				if (popover && !popover.contains(e.target as Node)) {
+					setPendingRemoveWorkspace(null);
+				}
 			}
 		};
 		document.addEventListener("mousedown", handler);
 		return () => document.removeEventListener("mousedown", handler);
-	}, [pendingDeleteId]);
+	}, [pendingDeleteId, workspaceMenuOpen, pendingRemoveWorkspace]);
 
 	const setThinking = async (level: string) => {
 		if (!activeId) return;
@@ -622,6 +660,59 @@ export function App() {
 									>
 										<span className="add-session-icon">+</span>
 									</button>
+									<div className="workspace-more-wrap">
+										<button
+											type="button"
+											className="workspace-more-btn"
+											onClick={(e) => {
+												e.stopPropagation();
+												setWorkspaceMenuOpen(workspaceMenuOpen === workspace ? null : workspace);
+											}}
+											title="更多操作"
+										>
+											&#x22EE;
+										</button>
+										{workspaceMenuOpen === workspace && (
+											<div className="workspace-menu">
+												<button
+													type="button"
+													className="workspace-menu-item"
+													onClick={(e) => {
+														e.stopPropagation();
+														setWorkspaceMenuOpen(null);
+														setPendingRemoveWorkspace(workspace);
+													}}
+												>
+													移除
+												</button>
+											</div>
+										)}
+									</div>
+									{pendingRemoveWorkspace === workspace && (
+										<div className="confirm-remove-ws-popover">
+											<span className="confirm-delete-text">移除该目录及所有会话？</span>
+											<button
+												type="button"
+												className="confirm-delete-btn confirm-delete-yes"
+												onClick={(e) => {
+													e.stopPropagation();
+													handleRemoveWorkspace(workspace);
+												}}
+											>
+												移除
+											</button>
+											<button
+												type="button"
+												className="confirm-delete-btn confirm-delete-no"
+												onClick={(e) => {
+													e.stopPropagation();
+													setPendingRemoveWorkspace(null);
+												}}
+											>
+												取消
+											</button>
+										</div>
+									)}
 								</div>
 								{!isCollapsed && sessions.map((s) => {
 									const sState = sessionStatesRef.current.get(s.id);

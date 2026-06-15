@@ -193,7 +193,7 @@ export function removeSessionFromIndex(sessionId: string): void {
 	const index = loadIndex();
 	for (const [ws, entries] of Object.entries(index.workspaces)) {
 		index.workspaces[ws] = entries.filter((e) => e.id !== sessionId);
-		if (index.workspaces[ws].length === 0) delete index.workspaces[ws];
+		// Keep empty workspace entries — user can explicitly remove them
 	}
 	saveIndex(index);
 
@@ -266,4 +266,29 @@ export function loadSessionMessages(projectDir: string, sessionId: string): unkn
 		}
 	}
 	return messages;
+}
+
+/** List all workspace directories from the index (including empty ones) */
+export function listWorkspaces(): string[] {
+	const index = loadIndex();
+	return Object.keys(index.workspaces);
+}
+
+/** Remove a workspace and all its sessions from the index */
+export function removeWorkspace(workspace: string): void {
+	const index = loadIndex();
+	const entries = index.workspaces[workspace] ?? [];
+	delete index.workspaces[workspace];
+	saveIndex(index);
+
+	// Delete all session files for this workspace
+	const sessionsDir = getSessionsDir(workspace);
+	if (existsSync(sessionsDir)) {
+		for (const entry of entries) {
+			const filePath = join(sessionsDir, `${entry.id}.jsonl`);
+			if (existsSync(filePath)) {
+				unlinkSync(filePath);
+			}
+		}
+	}
 }
