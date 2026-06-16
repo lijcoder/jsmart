@@ -873,6 +873,31 @@ li code,
 	gap: 6px;
 }
 
+/* ── Streaming Indicator ─────────────────────────────────────── */
+
+.streaming-indicator {
+	font-size: 11px;
+	color: var(--text-muted);
+	margin-bottom: 8px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.streaming-indicator::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--accent);
+	animation: streaming-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes streaming-pulse {
+	0%, 100% { opacity: 0.3; transform: scale(0.8); }
+	50% { opacity: 1; transform: scale(1); }
+}
+
 /* ── Thinking Block ──────────────────────────────────────────── */
 
 .thinking-block {

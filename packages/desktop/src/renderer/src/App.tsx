@@ -1127,9 +1127,53 @@ function MessageBubble({ message, userMessageRefs }: { message: UIMessage; userM
 		);
 	}
 
-	// For assistant: only last text block is visible, everything else in details
 	const allBlocks = message.blocks;
-	// Find the index of the last text block
+
+	// During streaming: only the currently processing block(s) are shown outside.
+	// Completed blocks (earlier text/thinking, done tool calls) go into details.
+	if (isStreaming) {
+		const activeBlocks: UIContentBlock[] = [];
+		const completedBlocks: UIContentBlock[] = [];
+
+		for (let i = 0; i < allBlocks.length; i++) {
+			const block = allBlocks[i];
+			const isLast = i === allBlocks.length - 1;
+			const isActiveTool =
+				block.type === "tool_call" &&
+				(block.toolCall?.status === "pending" || block.toolCall?.status === "running");
+
+			if (isLast || isActiveTool) {
+				activeBlocks.push(block);
+			} else {
+				completedBlocks.push(block);
+			}
+		}
+
+		return (
+			<div className="message message-assistant">
+				<div className="message-content">
+					<div className="streaming-indicator">处理中...</div>
+					{completedBlocks.length > 0 && (
+						<details className="message-details">
+							<summary className="message-details-summary">
+								{`${completedBlocks.length} 项已完成`}
+							</summary>
+							<div className="message-details-body">
+								{completedBlocks.map((block, i) => (
+									<ContentBlock key={i} block={block} isStreaming={false} />
+								))}
+							</div>
+						</details>
+					)}
+					{activeBlocks.map((block, i) => (
+						<ContentBlock key={i} block={block} isStreaming={true} />
+					))}
+				</div>
+			</div>
+		);
+	}
+
+	// Finalized: only last text block is visible, everything else in details
 	let lastTextIdx = -1;
 	for (let i = allBlocks.length - 1; i >= 0; i--) {
 		if (allBlocks[i].type === "text") {
@@ -1139,7 +1183,7 @@ function MessageBubble({ message, userMessageRefs }: { message: UIMessage; userM
 	}
 	const detailBlocks = allBlocks.filter((_, i) => i !== lastTextIdx);
 	const lastTextBlock = lastTextIdx >= 0 ? allBlocks[lastTextIdx] : null;
-	const hasDetails = detailBlocks.length > 0 || isStreaming;
+	const hasDetails = detailBlocks.length > 0;
 
 	return (
 		<div className="message message-assistant">
@@ -1147,17 +1191,17 @@ function MessageBubble({ message, userMessageRefs }: { message: UIMessage; userM
 				{hasDetails && (
 					<details className="message-details">
 						<summary className="message-details-summary">
-							{isStreaming ? "处理中..." : `${detailBlocks.length} 项详情`}
+							{`${detailBlocks.length} 项详情`}
 						</summary>
 						<div className="message-details-body">
 							{detailBlocks.map((block, i) => (
-								<ContentBlock key={i} block={block} isStreaming={isStreaming} />
+								<ContentBlock key={i} block={block} isStreaming={false} />
 							))}
 						</div>
 					</details>
 				)}
 				{lastTextBlock && (
-					<ContentBlock block={lastTextBlock} isStreaming={isStreaming} />
+					<ContentBlock block={lastTextBlock} isStreaming={false} />
 				)}
 			</div>
 		</div>
@@ -1192,7 +1236,7 @@ function UserTextBlock({ text }: { text: string }) {
 	);
 }
 
-function ContentBlock({ block, isStreaming: _isStreaming }: { block: UIContentBlock; isStreaming: boolean }) {
+function ContentBlock({ block, isStreaming }: { block: UIContentBlock; isStreaming: boolean }) {
 	switch (block.type) {
 		case "text":
 			if (!block.text) return null;
@@ -1202,7 +1246,7 @@ function ContentBlock({ block, isStreaming: _isStreaming }: { block: UIContentBl
 			return <UserTextBlock text={block.text} />;
 		case "thinking":
 			return block.text ? (
-				<details className="thinking-block">
+				<details className="thinking-block" open={isStreaming ? true : undefined}>
 					<summary className="thinking-summary">思考中...</summary>
 					<div className="thinking-content">{block.text}</div>
 				</details>
